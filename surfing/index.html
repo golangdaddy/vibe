@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surf Game</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            background: #87CEEB;
+        }
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #333;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = 800;
+        canvas.height = 600;
+
+        const player = {
+            x: 400,
+            y: 300,
+            width: 40,
+            height: 20,
+            speed: 0,
+            maxSpeed: 4,
+            rotation: Math.PI/2,
+            rotationSpeed: 0.05,
+            accelerating: false,
+            braking: false,
+            turningLeft: false,
+            turningRight: false,
+            lives: 5,
+            collisionShake: 0,
+            collisionDirection: 1,
+            hasNewInput: false
+        };
+
+        const aiCar = {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 20,
+            speed: 0,
+            maxSpeed: 3,      // Slightly slower than player
+            rotation: Math.PI/2,
+            rotationSpeed: 0.05,
+            accelerating: false,
+            braking: false,
+            turningLeft: false,
+            turningRight: false,
+            collisionShake: 0,
+            collisionDirection: 1,
+            hasNewAction: false,
+            stuckTimer: 0,
+            lastX: 0,
+            lastY: 0,
+            reverseTimer: 0,
+            mode: 'chase',  // 'chase' or 'scatter'
+            modeTimer: 0,
+            chaseDuration: 400,  // ~7 seconds of chase
+            scatterDuration: 200,  // ~3 seconds of scatter
+            scatterPoint: { x: 0, y: 0 }  // Point to scatter to
+        };
+
+        const buildings = [];
+        const roads = [];
+        const navigationPoints = [];
+
+        function checkCollision(rect1, rect2) {
+            // For rotated car (rect1), get all four corners after rotation
+            const centerX = rect1.x + rect1.width/2;
+            const centerY = rect1.y + rect1.height/2;
+            const corners = [
+                {x: -rect1.width/2, y: -rect1.height/2},
+                {x: rect1.width/2, y: -rect1.height/2},
+                {x: rect1.width/2, y: rect1.height/2},
+                {x: -rect1.width/2, y: rect1.height/2}
+            ].map(point => {
+                const rotatedX = point.x * Math.cos(player.rotation) - point.y * Math.sin(player.rotation);
+                const rotatedY = point.x * Math.sin(player.rotation) + point.y * Math.cos(player.rotation);
+                return {
+                    x: centerX + rotatedX,
+                    y: centerY + rotatedY
+                };
+            });
+
+            // Check if any of the corners are inside the building
+            for (const corner of corners) {
+                if (corner.x >= rect2.x && 
+                    corner.x <= rect2.x + rect2.width &&
+                    corner.y >= rect2.y && 
+                    corner.y <= rect2.y + rect2.height) {
+                    return true;
+                }
+            }
+
+            // Also check if any building corners are inside the rotated car's bounding lines
+            const buildingCorners = [
+                {x: rect2.x, y: rect2.y},
+                {x: rect2.x + rect2.width, y: rect2.y},
+                {x: rect2.x + rect2.width, y: rect2.y + rect2.height},
+                {x: rect2.x, y: rect2.y + rect2.height}
+            ];
+
+            for (let i = 0; i < corners.length; i++) {
+                const start = corners[i];
+                const end = corners[(i + 1) % corners.length];
+                
+                for (const bCorner of buildingCorners) {
+                    if (isPointInRotatedRect(bCorner, rect1)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        function isPointInRotatedRect(point, rect) {
+            // Transform point to origin-centered coordinates
+            const dx = point.x - (rect.x + rect.width/2);
+            const dy = point.y - (rect.y + rect.height/2);
+            
+            // Rotate point in opposite direction of rectangle's rotation
+            const rotatedX = dx * Math.cos(-player.rotation) - dy * Math.sin(-player.rotation);
+            const rotatedY = dx * Math.sin(-player.rotation) + dy * Math.cos(-player.rotation);
+            
+            // Check if rotated point is inside rectangle
+            return Math.abs(rotatedX) <= rect.width/2 && Math.abs(rotatedY) <= rect.height/2;
+        }
+
+        function generateCity() {
+            // Clear existing arrays
+            buildings.length = 0;
+            roads.length = 0;
+
+            // Create a grid of buildings
+            const blockSize = 100;
+            for (let x = 0; x < canvas.width; x += blockSize) {
+                for (let y = 0; y < canvas.height; y += blockSize) {
+                    // Skip road areas
+                    if (x % 200 < 60 || y % 200 < 60) continue;
+                    
+                    buildings.push({
+                        x: x + 10,
+                        y: y + 10,
+                        width: 80,
+                        height: 80,
+                        color: `rgb(${100 + Math.random() * 50}, ${100 + Math.random() * 50}, ${100 + Math.random() * 50})`
+                    });
+                }
+            }
+
+            // Create roads in a grid pattern
+            for (let y = 0; y < canvas.height; y += 200) {
+                roads.push({
+                    x: 0,
+                    y: y,
+                    width: canvas.width,
+                    height: 60
+                });
+            }
+
+            for (let x = 0; x < canvas.width; x += 200) {
+                roads.push({
+                    x: x,
+                    y: 0,
+                    width: 60,
+                    height: canvas.height
+                });
+            }
+        }
+
+        function drawRoads() {
+            ctx.fillStyle = '#404040';
+            roads.forEach(road => {
+                ctx.fillRect(road.x, road.y, road.width, road.height);
+            });
+        }
+
+        function drawBuildings() {
+            buildings.forEach(building => {
+                ctx.fillStyle = building.color;
+                ctx.fillRect(building.x, building.y, building.width, building.height);
+            });
+        }
+
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(player.x + player.width/2, player.y + player.height/2);
+            ctx.rotate(player.rotation);
+            ctx.fillStyle = '#FF0000';
+            ctx.fillRect(-player.width/2, -player.height/2, player.width, player.height);
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(-player.width/4, -player.height/2, player.width/8, player.height);
+            ctx.restore();
+        }
+
+        function updatePlayer() {
+            // Update speed based on acceleration/braking (inverted)
+            if (player.accelerating) {
+                player.speed = Math.min(player.speed - 0.1, player.maxSpeed);  // Changed back to negative
+            } else if (player.braking) {
+                player.speed = Math.max(player.speed + 0.1, -player.maxSpeed/2);  // Changed back to positive
+            } else {
+                player.speed *= 0.93;
+            }
+
+            // Update rotation based on turning
+            if (Math.abs(player.speed) > 0.1) {  // Only turn if moving
+                let rotationAmount = 0;
+                
+                if (player.turningLeft) {
+                    rotationAmount = player.rotationSpeed * (player.speed > 0 ? 1 : -1) * (Math.abs(player.speed)/player.maxSpeed);
+                    player.rotation += rotationAmount;
+                }
+                if (player.turningRight) {
+                    rotationAmount = -player.rotationSpeed * (player.speed > 0 ? 1 : -1) * (Math.abs(player.speed)/player.maxSpeed);
+                    player.rotation += rotationAmount;
+                }
+
+                // Apply automatic braking during turns
+                if (rotationAmount !== 0) {
+                    // Calculate how sharp the turn is (0 to 1)
+                    const turnSharpness = Math.abs(rotationAmount) / (player.rotationSpeed * Math.abs(player.speed)/player.maxSpeed);
+                    // Reduce speed based on turn sharpness (increased by 20%)
+                    player.speed *= (1 - turnSharpness * 0.036);
+                }
+            }
+
+            // Calculate new position
+            const newX = player.x + Math.cos(player.rotation) * player.speed;
+            const newY = player.y + Math.sin(player.rotation) * player.speed;
+
+            // Check if new position would collide with any buildings
+            const futurePlayer = {
+                x: newX,
+                y: newY,
+                width: player.width,
+                height: player.height
+            };
+
+            let collision = false;
+            buildings.forEach(building => {
+                if (checkCollision(futurePlayer, building)) {
+                    collision = true;
+                }
+            });
+
+            // Only update position if no collision
+            if (!collision) {
+                player.x = Math.max(0, Math.min(canvas.width - player.width, newX));
+                player.y = Math.max(0, Math.min(canvas.height - player.height, newY));
+            } else if (player.hasNewInput) {  // Only apply random bounce if there's been new input
+                player.speed = -player.speed * 1.0;
+                player.collisionShake = 30;
+                player.collisionDirection = Math.random() < 0.5 ? 1 : -1;
+                player.hasNewInput = false;  // Reset until new input
+            } else {
+                player.speed = -player.speed * 1.0;  // Simple bounce without randomness
+            }
+
+            // Apply collision shake if active
+            if (player.collisionShake > 0) {
+                const shakeAmount = (player.collisionShake / 30) * 0.1; // Reduced from 0.2 to 0.1
+                player.rotation += shakeAmount * player.collisionDirection;
+                player.collisionShake--;
+                if (player.collisionShake === 0) {
+                    player.collisionDirection = 1;
+                }
+            }
+        }
+
+        function respawnAICar() {
+            // Find a valid spawn point away from player
+            let validSpawn = false;
+            while (!validSpawn) {
+                aiCar.x = Math.random() * (canvas.width - aiCar.width);
+                aiCar.y = Math.random() * (canvas.height - aiCar.height);
+                
+                // Check if spawn point is on road and away from player
+                const distanceToPlayer = Math.hypot(aiCar.x - player.x, aiCar.y - player.y);
+                if (distanceToPlayer > 300 && isOnRoad(aiCar)) {
+                    validSpawn = true;
+                }
+            }
+            aiCar.speed = 0;
+        }
+
+        function isOnRoad(vehicle) {
+            for (const road of roads) {
+                if (vehicle.x >= road.x && 
+                    vehicle.x <= road.x + road.width && 
+                    vehicle.y >= road.y && 
+                    vehicle.y <= road.y + road.height) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function generateNavigationPoints() {
+            navigationPoints.length = 0;
+            
+            // Create navigation points at road intersections
+            for (let x = 60; x < canvas.width; x += 200) {
+                for (let y = 60; y < canvas.height; y += 200) {
+                    navigationPoints.push({
+                        x: x,
+                        y: y,
+                        connections: []
+                    });
+                }
+            }
+
+            // Connect navigation points if there's a clear path
+            navigationPoints.forEach((point, i) => {
+                navigationPoints.forEach((otherPoint, j) => {
+                    if (i !== j) {
+                        // Check if points are on adjacent intersections
+                        const dx = Math.abs(point.x - otherPoint.x);
+                        const dy = Math.abs(point.y - otherPoint.y);
+                        if ((dx === 200 && dy === 0) || (dx === 0 && dy === 200)) {
+                            point.connections.push(j);
+                        }
+                    }
+                });
+            });
+        }
+
+        function findNearestNavigationPoint(x, y) {
+            let nearest = null;
+            let minDist = Infinity;
+            
+            navigationPoints.forEach((point, index) => {
+                const dist = Math.hypot(point.x - x, point.y - y);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = index;
+                }
+            });
+            
+            return nearest;
+        }
+
+        function findPathToTarget(startPoint, endPoint) {
+            const visited = new Set();
+            const queue = [[startPoint]];
+            
+            while (queue.length > 0) {
+                const path = queue.shift();
+                const current = path[path.length - 1];
+                
+                if (current === endPoint) {
+                    return path;
+                }
+                
+                if (!visited.has(current)) {
+                    visited.add(current);
+                    navigationPoints[current].connections.forEach(next => {
+                        if (!visited.has(next)) {
+                            queue.push([...path, next]);
+                        }
+                    });
+                }
+            }
+            
+            return null;
+        }
+
+        function switchAIMode() {
+            if (aiCar.mode === 'chase') {
+                aiCar.mode = 'scatter';
+                aiCar.modeTimer = aiCar.scatterDuration;
+                // Pick a corner to scatter to
+                const corners = [
+                    {x: 0, y: 0},
+                    {x: canvas.width, y: 0},
+                    {x: 0, y: canvas.height},
+                    {x: canvas.width, y: canvas.height}
+                ];
+                aiCar.scatterPoint = corners[Math.floor(Math.random() * corners.length)];
+            } else {
+                aiCar.mode = 'chase';
+                aiCar.modeTimer = aiCar.chaseDuration;
+            }
+        }
+
+        function updateAICar() {
+            // Update mode timer
+            aiCar.modeTimer--;
+            if (aiCar.modeTimer <= 0) {
+                switchAIMode();
+            }
+
+            // Stuck detection
+            const moved = Math.hypot(aiCar.x - aiCar.lastX, aiCar.y - aiCar.lastY);
+            aiCar.lastX = aiCar.x;
+            aiCar.lastY = aiCar.y;
+            
+            if (moved < 0.5) {
+                aiCar.stuckTimer++;
+            } else {
+                aiCar.stuckTimer = 0;
+            }
+
+            // If stuck, reverse and turn
+            if (aiCar.stuckTimer > 30) {
+                aiCar.reverseTimer = 45;
+                aiCar.stuckTimer = 0;
+            }
+
+            // Calculate target based on mode
+            let targetX, targetY;
+            if (aiCar.mode === 'chase') {
+                // Add slight prediction to target position based on player speed
+                targetX = player.x + Math.cos(player.rotation) * player.speed * 10;
+                targetY = player.y + Math.sin(player.rotation) * player.speed * 10;
+            } else {
+                targetX = aiCar.scatterPoint.x;
+                targetY = aiCar.scatterPoint.y;
+            }
+
+            // Calculate angle to target
+            const dx = targetX - aiCar.x;
+            const dy = targetY - aiCar.y;
+            const angleToTarget = Math.atan2(dy, dx);
+            const distanceToTarget = Math.hypot(dx, dy);
+            
+            let angleDiff = angleToTarget - aiCar.rotation;
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+            // If in reverse mode, back up and turn
+            if (aiCar.reverseTimer > 0) {
+                aiCar.accelerating = false;
+                aiCar.braking = true;
+                aiCar.turningLeft = Math.random() < 0.5;
+                aiCar.turningRight = !aiCar.turningLeft;
+                aiCar.reverseTimer--;
+            } else {
+                // Normal chase behavior - corrected for inverted speed
+                const alignedWithTarget = Math.abs(angleDiff) < Math.PI/3;
+                
+                // Fix turning direction (inverted)
+                aiCar.turningLeft = angleDiff > 0.1;  // Changed from < to >
+                aiCar.turningRight = angleDiff < -0.1;  // Changed from > to <
+                
+                // Since negative speed is forward, we accelerate when aligned
+                aiCar.accelerating = alignedWithTarget;
+                aiCar.braking = !alignedWithTarget;
+            }
+
+            // Physics are correct (negative is forward)
+            if (aiCar.accelerating) {
+                aiCar.speed = Math.min(aiCar.speed - 0.15, aiCar.maxSpeed);  // Negative for forward
+            } else if (aiCar.braking) {
+                aiCar.speed = Math.max(aiCar.speed + 0.15, -aiCar.maxSpeed/2);  // Positive for backward
+            } else {
+                aiCar.speed *= 0.93;
+            }
+
+            // Fix rotation direction based on speed (inverted)
+            if (Math.abs(aiCar.speed) > 0.1) {
+                if (aiCar.turningLeft) {
+                    aiCar.rotation += aiCar.rotationSpeed * 1.5;  // Changed from -= to +=
+                }
+                if (aiCar.turningRight) {
+                    aiCar.rotation -= aiCar.rotationSpeed * 1.5;  // Changed from += to -=
+                }
+            }
+
+            // Calculate new position
+            const newX = aiCar.x + Math.cos(aiCar.rotation) * aiCar.speed;
+            const newY = aiCar.y + Math.sin(aiCar.rotation) * aiCar.speed;
+
+            // Check collisions
+            const futureAICar = {
+                x: newX,
+                y: newY,
+                width: aiCar.width,
+                height: aiCar.height
+            };
+
+            let collision = false;
+            buildings.forEach(building => {
+                if (checkCollision(futureAICar, building)) {
+                    collision = true;
+                }
+            });
+
+            // Update position or handle collision
+            if (!collision) {
+                aiCar.x = Math.max(0, Math.min(canvas.width - aiCar.width, newX));
+                aiCar.y = Math.max(0, Math.min(canvas.height - aiCar.height, newY));
+                aiCar.hasNewAction = true;  // Mark that AI has moved successfully
+            } else if (aiCar.hasNewAction) {  // Only apply bounce after successful movement
+                aiCar.speed = -aiCar.speed * 1.0;
+                aiCar.rotation += Math.PI;  // Turn 180 degrees
+                aiCar.collisionShake = 30;
+                aiCar.collisionDirection = Math.random() < 0.5 ? 1 : -1;
+                aiCar.hasNewAction = false;  // Reset until new successful movement
+            } else {
+                aiCar.speed = -aiCar.speed * 1.0;  // Simple bounce without randomness
+                aiCar.rotation += Math.PI;  // Turn 180 degrees
+            }
+
+            // Handle collision shake
+            if (aiCar.collisionShake > 0) {
+                const shakeAmount = (aiCar.collisionShake / 30) * 0.1;
+                aiCar.rotation += shakeAmount * aiCar.collisionDirection;
+                aiCar.collisionShake--;
+                if (aiCar.collisionShake === 0) {
+                    aiCar.collisionDirection = 1;
+                }
+            }
+
+            // Check collision with player
+            if (checkCollision(aiCar, player)) {
+                player.lives--;
+                if (player.lives <= 0) {
+                    isGameOver = true;
+                }
+                respawnAICar();
+            }
+        }
+
+        function drawAICar() {
+            ctx.save();
+            ctx.translate(aiCar.x + aiCar.width/2, aiCar.y + aiCar.height/2);
+            ctx.rotate(aiCar.rotation);
+            
+            // Change color based on mode
+            ctx.fillStyle = aiCar.mode === 'chase' ? '#FF0000' : '#0000FF';
+            ctx.fillRect(-aiCar.width/2, -aiCar.height/2, aiCar.width, aiCar.height);
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(-aiCar.width/4, -aiCar.height/2, aiCar.width/8, aiCar.height);
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (isGameOver) {
+                ctx.fillStyle = 'black';
+                ctx.font = '48px Arial';
+                ctx.fillText('Game Over!', canvas.width/2 - 100, canvas.height/2);
+                return;
+            }
+            
+            drawRoads();
+            drawBuildings();
+            updatePlayer();
+            updateAICar();
+            drawPlayer();
+            drawAICar();
+
+            // Draw lives
+            ctx.fillStyle = 'white';
+            ctx.font = '24px Arial';
+            ctx.fillText(`Lives: ${player.lives}`, 20, 30);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('keydown', (event) => {
+            switch(event.code) {
+                case 'ArrowUp':
+                    player.accelerating = true;
+                    player.hasNewInput = true;  // Mark that there's been new input
+                    break;
+                case 'ArrowDown':
+                    player.braking = true;
+                    player.hasNewInput = true;
+                    break;
+                case 'ArrowLeft':
+                    player.turningLeft = true;
+                    player.hasNewInput = true;
+                    break;
+                case 'ArrowRight':
+                    player.turningRight = true;
+                    player.hasNewInput = true;
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            switch(event.code) {
+                case 'ArrowUp':
+                    player.accelerating = false;
+                    break;
+                case 'ArrowDown':
+                    player.braking = false;
+                    break;
+                case 'ArrowLeft':
+                    player.turningLeft = false;
+                    break;
+                case 'ArrowRight':
+                    player.turningRight = false;
+                    break;
+            }
+        });
+
+        canvas.style.background = '#228B22'; // Green background for grass
+        generateCity();
+        generateNavigationPoints();
+        let isGameOver = false;
+        respawnAICar();
+        gameLoop();
+    </script>
+</body>
+</html>

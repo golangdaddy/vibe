@@ -314,12 +314,16 @@ function getBlockPosition(intersection, place) {
     
     // Fix: Clone the point to avoid mutating the original
     const point = intersection.point.clone();
+    
+    // For placing blocks, offset by half a block in the direction of the face normal
     if (place) {
-        point.add(intersection.face.normal.multiplyScalar(0.5));
+        point.add(intersection.face.normal.multiplyScalar(BLOCK_SIZE/2));
     } else {
-        point.add(intersection.face.normal.multiplyScalar(-0.5));
+        // For removing blocks, offset slightly into the block
+        point.add(intersection.face.normal.multiplyScalar(-BLOCK_SIZE/2));
     }
     
+    // Round to nearest block position
     return {
         x: Math.round(point.x),
         y: Math.round(point.y),
