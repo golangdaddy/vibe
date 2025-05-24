@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft HTML5</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <canvas id="gameCanvas" tabindex="0"></canvas>
+    <div id="crosshair">+</div>
+    <div id="controls">
+        <p>Controls:</p>
+        <p>W,A,S,D - Move</p>
+        <p>Space - Move Up</p>
+        <p>Shift - Move Down</p>
+        <p>Mouse - Look around</p>
+        <p>Left Click - Break block</p>
+        <p>Right Click - Place block</p>
+        <p>Middle Click - Rotate shape</p>
+        <p>Scroll Wheel - Change shape</p>
+        <p>Alt - Cycle materials</p>
+        <p>Tab - Open material menu</p>
+        <p>Click - Enable controls</p>
+        <p>Esc - Release controls</p>
+        <p><em>Break blocks to collect materials!</em></p>
+    </div>
+    <div id="palette"></div>
+    
+    <!-- Shapes Menu -->
+    <div id="shapesMenu">
+        <h3>Shapes</h3>
+        <div id="shapesList">
+            <div class="shape-item selected" data-shape="cube" title="Cube">
+                <div class="shape-preview cube-preview"></div>
+                <span>Cube</span>
+            </div>
+            <div class="shape-item" data-shape="sphere" title="Sphere">
+                <div class="shape-preview sphere-preview"></div>
+                <span>Sphere</span>
+            </div>
+            <div class="shape-item" data-shape="ramp" title="Ramp">
+                <div class="shape-preview ramp-preview"></div>
+                <span>Ramp</span>
+            </div>
+            <div class="shape-item" data-shape="pyramid" title="Pyramid">
+                <div class="shape-preview pyramid-preview"></div>
+                <span>Pyramid</span>
+            </div>
+            <div class="shape-item" data-shape="cone" title="Cone">
+                <div class="shape-preview cone-preview"></div>
+                <span>Cone</span>
+            </div>
+        </div>
+        <div id="rotationInfo">
+            <p>Rotation: <span id="currentRotation">0°</span></p>
+        </div>
+    </div>
+    
+    <!-- Material Selection Menu -->
+    <div id="materialMenu" class="hidden">
+        <div id="menuContent">
+            <div id="gameModeSelector">
+                <label>Game Mode:</label>
+                <select id="gameModeSelect">
+                    <option value="normal">Normal</option>
+                    <option value="creative">Creative (Sandbox)</option>
+                </select>
+            </div>
+            <h2>Material Selection</h2>
+            <div id="materialGrid"></div>
+            <p class="menu-hint">Click a material to select it • Press Tab or Esc to close</p>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html> 

@@ -1,0 +1,400 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+}
+
+#gameCanvas {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+}
+
+#crosshair {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 24px;
+    pointer-events: none;
+    user-select: none;
+}
+
+#controls {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+#controls p {
+    margin: 5px 0;
+}
+
+#controls em {
+    color: #ffff88;
+}
+
+#palette {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 10px;
+    border-radius: 5px;
+    min-width: 100px;
+    min-height: 60px;
+    align-items: center;
+    justify-content: center;
+}
+
+#palette:empty::after {
+    content: "Break blocks to collect materials!";
+    color: #aaa;
+    font-size: 12px;
+    text-align: center;
+}
+
+.palette-item {
+    width: 40px;
+    height: 40px;
+    border: 2px solid #fff;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.palette-item:hover {
+    transform: scale(1.1);
+}
+
+.palette-item.selected {
+    border-color: #ffff00;
+    box-shadow: 0 0 10px rgba(255, 255, 0, 0.5);
+}
+
+.material-count {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 1px 3px;
+    border-radius: 3px;
+    min-width: 12px;
+    text-align: center;
+    line-height: 1;
+}
+
+/* Shapes Menu Styles */
+#shapesMenu {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    width: 120px;
+    border: 1px solid #555;
+}
+
+#shapesMenu h3 {
+    margin: 0 0 10px 0;
+    text-align: center;
+    font-size: 16px;
+    color: #fff;
+}
+
+#shapesList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.shape-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    border: 1px solid #666;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: rgba(40, 40, 40, 0.5);
+}
+
+.shape-item:hover {
+    background: rgba(60, 60, 60, 0.7);
+    border-color: #888;
+}
+
+.shape-item.selected {
+    border-color: #ffff00;
+    background: rgba(80, 80, 40, 0.7);
+    box-shadow: 0 0 8px rgba(255, 255, 0, 0.3);
+}
+
+.shape-preview {
+    width: 20px;
+    height: 20px;
+    border: 1px solid #ccc;
+    flex-shrink: 0;
+}
+
+.cube-preview {
+    background: linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%), 
+                linear-gradient(45deg, #ddd 25%, #fff 25%, #fff 75%, #ddd 75%);
+    background-size: 4px 4px;
+    background-position: 0 0, 2px 2px;
+}
+
+.sphere-preview {
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #fff, #ddd, #aaa);
+}
+
+.ramp-preview {
+    background: linear-gradient(135deg, transparent 49%, #ddd 51%);
+    position: relative;
+}
+
+.ramp-preview::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 49%, rgba(255,255,255,0.3) 51%);
+}
+
+.pyramid-preview {
+    background: linear-gradient(to top, #ddd 0%, #ddd 40%, transparent 41%), 
+                linear-gradient(to right, transparent 49%, #aaa 51%);
+    position: relative;
+}
+
+.pyramid-preview::after {
+    content: '';
+    position: absolute;
+    top: 20%;
+    left: 20%;
+    right: 20%;
+    bottom: 20%;
+    background: #fff;
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.cone-preview {
+    background: radial-gradient(ellipse at bottom, #ddd 0%, #ddd 40%, transparent 41%);
+    position: relative;
+}
+
+.cone-preview::after {
+    content: '';
+    position: absolute;
+    top: 10%;
+    left: 35%;
+    right: 35%;
+    bottom: 50%;
+    background: #fff;
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+}
+
+.shape-item span {
+    font-size: 11px;
+    color: #fff;
+}
+
+#rotationInfo {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #555;
+}
+
+#rotationInfo p {
+    margin: 0;
+    font-size: 11px;
+    text-align: center;
+    color: #ccc;
+}
+
+#currentRotation {
+    color: #ffff00;
+    font-weight: bold;
+}
+
+/* Material Menu Styles */
+#materialMenu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    transition: opacity 0.3s ease;
+}
+
+#materialMenu.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#menuContent {
+    background: rgba(40, 40, 40, 0.95);
+    border-radius: 10px;
+    padding: 30px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    border: 2px solid #555;
+}
+
+#gameModeSelector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding: 10px;
+    background: rgba(60, 60, 60, 0.7);
+    border-radius: 5px;
+    border: 1px solid #777;
+}
+
+#gameModeSelector label {
+    color: white;
+    font-weight: bold;
+}
+
+#gameModeSelect {
+    background: rgba(80, 80, 80, 0.9);
+    color: white;
+    border: 1px solid #999;
+    border-radius: 3px;
+    padding: 5px 10px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+#gameModeSelect:focus {
+    outline: none;
+    border-color: #ffff00;
+    box-shadow: 0 0 5px rgba(255, 255, 0, 0.3);
+}
+
+#menuContent h2 {
+    color: white;
+    text-align: center;
+    margin: 0 0 20px 0;
+    font-size: 24px;
+}
+
+#materialGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.menu-material-item {
+    width: 80px;
+    height: 80px;
+    border: 2px solid #fff;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.menu-material-item:hover {
+    transform: scale(1.05);
+    border-color: #ffff00;
+    box-shadow: 0 0 15px rgba(255, 255, 0, 0.3);
+}
+
+.menu-material-item.selected {
+    border-color: #ffff00;
+    box-shadow: 0 0 20px rgba(255, 255, 0, 0.5);
+}
+
+.menu-material-item.unavailable {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.menu-material-item.unavailable:hover {
+    transform: none;
+    border-color: #fff;
+    box-shadow: none;
+}
+
+.material-name {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-size: 10px;
+    text-align: center;
+    width: 100px;
+    white-space: nowrap;
+    text-transform: capitalize;
+}
+
+.material-inventory-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 4px;
+    border-radius: 3px;
+    min-width: 12px;
+    text-align: center;
+}
+
+.creative-indicator {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: rgba(255, 215, 0, 0.9);
+    color: black;
+    font-size: 8px;
+    font-weight: bold;
+    padding: 1px 3px;
+    border-radius: 3px;
+    content: "∞";
+}
+
+.menu-hint {
+    color: #aaa;
+    text-align: center;
+    font-size: 12px;
+    margin: 0;
+} 
