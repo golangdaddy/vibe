@@ -143,6 +143,82 @@ document.addEventListener('mousemove', (event) => {
     }
 });
 
+// Add after the materials section
+const particleMaterial = new THREE.PointsMaterial({
+    size: 0.1,
+    sizeAttenuation: true,
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.8
+});
+
+// Add this function before the onMouseClick function
+function createBlockDestroyEffect(position, blockMaterial) {
+    const particleCount = 60;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const velocities = [];
+    
+    // Create particles in a cube shape
+    for (let i = 0; i < particleCount; i++) {
+        const i3 = i * 3;
+        positions[i3] = position.x + (Math.random() - 0.5) * 0.2;
+        positions[i3 + 1] = position.y + (Math.random() - 0.5) * 0.2;
+        positions[i3 + 2] = position.z + (Math.random() - 0.5) * 0.2;
+        
+        // Random velocity for each particle
+        velocities.push({
+            x: (Math.random() - 0.5) * 0.2,
+            y: Math.random() * 0.2,
+            z: (Math.random() - 0.5) * 0.2
+        });
+    }
+    
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    
+    // Create particle system with block's color
+    const particles = new THREE.Points(geometry, new THREE.PointsMaterial({
+        size: 0.1,
+        sizeAttenuation: true,
+        color: blockMaterial.color,
+        transparent: true,
+        opacity: 0.8
+    }));
+    
+    scene.add(particles);
+    
+    // Animate particles
+    let elapsed = 0;
+    const animate = () => {
+        elapsed += 0.016; // Approximate for 60fps
+        
+        const positions = particles.geometry.attributes.position.array;
+        
+        // Update particle positions based on velocity and add gravity
+        for (let i = 0; i < particleCount; i++) {
+            const i3 = i * 3;
+            positions[i3] += velocities[i].x;
+            positions[i3 + 1] += velocities[i].y - elapsed * 0.5; // Add gravity
+            positions[i3 + 2] += velocities[i].z;
+        }
+        
+        particles.geometry.attributes.position.needsUpdate = true;
+        
+        // Fade out
+        particles.material.opacity = Math.max(0, 0.8 - elapsed * 2);
+        
+        if (elapsed < 0.4) {
+            requestAnimationFrame(animate);
+        } else {
+            scene.remove(particles);
+            particles.geometry.dispose();
+            particles.material.dispose();
+        }
+    };
+    
+    animate();
+}
+
 // Block interaction
 function onMouseClick(event) {
     if (!isPointerLocked) return;
@@ -189,6 +265,9 @@ function onMouseClick(event) {
                         addToInventory(materialName);
                     }
                 }
+                
+                // Create particle effect before removing the block
+                createBlockDestroyEffect(block.position, block.material);
                 
                 scene.remove(block);
                 blocks.delete(key);
