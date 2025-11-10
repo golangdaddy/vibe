@@ -2,12 +2,18 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 	"unsafe"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"github.com/stianeikeland/go-rpio/v4"
 )
 
@@ -24,12 +30,21 @@ const (
 var (
 	debugMode  = false
 	keyPressed = false
+
+	// Colors for petrol pump display
+	displayBg    = color.RGBA{R: 20, G: 20, B: 20, A: 255}
+	displayGreen = color.RGBA{R: 0, G: 255, B: 100, A: 255}
+	displayAmber = color.RGBA{R: 255, G: 200, B: 0, A: 255}
+	displayWhite = color.RGBA{R: 240, G: 240, B: 240, A: 255}
+	displayRed   = color.RGBA{R: 255, G: 50, B: 50, A: 255}
 )
 
 type PetrolPump struct {
-	litres float64
-	amount float64
-	button rpio.Pin
+	litres      float64
+	amount      float64
+	button      rpio.Pin
+	litresLabel *canvas.Text
+	amountLabel *canvas.Text
 }
 
 func NewPetrolPump() *PetrolPump {
@@ -42,174 +57,187 @@ func NewPetrolPump() *PetrolPump {
 func (p *PetrolPump) increment() {
 	p.litres += incrementRate
 	p.amount = p.litres * pricePerLitre
+	p.updateGUIDisplay()
 }
 
 func (p *PetrolPump) reset() {
 	p.litres = 0.0
 	p.amount = 0.0
+	p.updateGUIDisplay()
 }
 
-func (p *PetrolPump) display() {
-	// Clear screen and move cursor to top
-	fmt.Print("\033[2J\033[H")
-
-	// Colors
-	green := "\033[38;2;0;255;100m"   // Bright green
-	amber := "\033[38;2;255;200;0m"   // Amber/yellow
-	white := "\033[38;2;240;240;240m" // Off-white
-	red := "\033[38;2;255;50;50m"     // Red for debug
-	bold := "\033[1m"
-	reset := "\033[0m"
-	dim := "\033[2m"
-
-	// Calculate centered positions for terminal width
-	litresStr := fmt.Sprintf("%.2f", p.litres)
-	amountStr := fmt.Sprintf("%.2f", p.amount)
-
-	// Print display with spacing for fullscreen effect
-	fmt.Println()
-	fmt.Println()
-	fmt.Println()
-
-	// Title
-	if debugMode {
-		fmt.Printf("                    %s%s🔧 DEBUG MODE 🔧%s\n", red, bold, reset)
-		fmt.Println()
+func (p *PetrolPump) updateGUIDisplay() {
+	if p.litresLabel != nil {
+		p.litresLabel.Text = fmt.Sprintf("%.2f", p.litres)
+		p.litresLabel.Refresh()
 	}
-	fmt.Printf("              %s%s═══════════════════════════════%s\n", white, bold, reset)
-	fmt.Printf("              %s%s║                               ║%s\n", white, bold, reset)
-	fmt.Printf("              %s%s║         PETROL PUMP           ║%s\n", white, bold, reset)
-	fmt.Printf("              %s%s║                               ║%s\n", white, bold, reset)
-	fmt.Printf("              %s%s═══════════════════════════════%s\n", white, bold, reset)
-	fmt.Println()
-	fmt.Println()
+	if p.amountLabel != nil {
+		p.amountLabel.Text = fmt.Sprintf("%.2f", p.amount)
+		p.amountLabel.Refresh()
+	}
+}
 
-	// LITRES section with large numbers
-	fmt.Printf("                     %s%sLITRES%s\n", amber, bold, reset)
-	fmt.Println()
+func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
+	w := a.NewWindow("Petrol Pump Display")
+	w.SetFullScreen(true)
 
-	// Large number display for litres
-	printLargeNumber(litresStr, green, bold, reset)
-	fmt.Println()
-	fmt.Printf("                        %s%sL%s\n", white, bold, reset)
-	fmt.Println()
-	fmt.Println()
+	// Create background
+	bg := canvas.NewRectangle(displayBg)
 
-	// Separator
-	fmt.Printf("              %s%s───────────────────────────────%s\n", green, bold, reset)
-	fmt.Println()
-	fmt.Println()
+	// Title/Brand
+	title := canvas.NewText("PETROL", displayWhite)
+	title.TextSize = 56
+	title.Alignment = fyne.TextAlignCenter
+	title.TextStyle = fyne.TextStyle{Bold: true}
 
-	// AMOUNT section with large numbers
-	fmt.Printf("                     %s%sAMOUNT%s\n", amber, bold, reset)
-	fmt.Println()
-
-	// Large number display for amount
-	fmt.Printf("                      %s%s$%s ", green, bold, reset)
-	printLargeNumber(amountStr, green, bold, reset)
-	fmt.Println()
-	fmt.Println()
-
-	// Separator
-	fmt.Printf("              %s%s───────────────────────────────%s\n", green, bold, reset)
-	fmt.Println()
-	fmt.Println()
-
-	// Info
-	fmt.Printf("               %sRate: $%.2f per litre%s\n", dim, pricePerLitre, reset)
-	fmt.Println()
-	fmt.Println()
-
-	// Instructions
+	// Debug mode indicator (if in debug mode)
+	var modeIndicator *canvas.Text
 	if debugMode {
-		fmt.Printf("          %s[SPACE] Pump  [R] Reset  [Ctrl+C] Exit%s\n", white, reset)
+		modeIndicator = canvas.NewText("🔧 DEBUG MODE 🔧", displayRed)
+		modeIndicator.TextSize = 28
+		modeIndicator.Alignment = fyne.TextAlignCenter
+		modeIndicator.TextStyle = fyne.TextStyle{Bold: true}
+	}
+
+	// LITRES section
+	litresHeader := canvas.NewText("LITRES", displayAmber)
+	litresHeader.TextSize = 42
+	litresHeader.Alignment = fyne.TextAlignCenter
+	litresHeader.TextStyle = fyne.TextStyle{Bold: true}
+
+	p.litresLabel = canvas.NewText("0.00", displayGreen)
+	p.litresLabel.TextSize = 140
+	p.litresLabel.Alignment = fyne.TextAlignCenter
+	p.litresLabel.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+
+	litresUnit := canvas.NewText("L", displayWhite)
+	litresUnit.TextSize = 52
+	litresUnit.Alignment = fyne.TextAlignCenter
+	litresUnit.TextStyle = fyne.TextStyle{Bold: true}
+
+	// AMOUNT section
+	amountHeader := canvas.NewText("AMOUNT", displayAmber)
+	amountHeader.TextSize = 42
+	amountHeader.Alignment = fyne.TextAlignCenter
+	amountHeader.TextStyle = fyne.TextStyle{Bold: true}
+
+	currencySymbol := canvas.NewText("$", displayGreen)
+	currencySymbol.TextSize = 90
+	currencySymbol.Alignment = fyne.TextAlignCenter
+	currencySymbol.TextStyle = fyne.TextStyle{Bold: true}
+
+	p.amountLabel = canvas.NewText("0.00", displayGreen)
+	p.amountLabel.TextSize = 140
+	p.amountLabel.Alignment = fyne.TextAlignCenter
+	p.amountLabel.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+
+	// Price per litre indicator
+	priceInfo := canvas.NewText(fmt.Sprintf("Rate: $%.2f per litre", pricePerLitre), displayWhite)
+	priceInfo.TextSize = 32
+	priceInfo.Alignment = fyne.TextAlignCenter
+
+	// Status text
+	var statusText string
+	if debugMode {
+		statusText = "Hold SPACE to pump • Press R to reset • ESC to exit"
 	} else {
-		fmt.Printf("            %sPress and hold button to pump%s\n", white, reset)
+		statusText = "Press and hold button to pump"
 	}
-	fmt.Println()
-	fmt.Println()
-}
+	statusLabel := canvas.NewText(statusText, displayWhite)
+	statusLabel.TextSize = 28
+	statusLabel.Alignment = fyne.TextAlignCenter
 
-func printLargeNumber(numStr string, colorCode string, bold string, reset string) {
-	// Print large-style numbers using ASCII art (simplified single-line version)
-	fmt.Printf("                   %s%s%s%s\n", colorCode, bold, scaledNumber(numStr), reset)
-}
+	// Decorative separator lines
+	line1 := canvas.NewRectangle(displayGreen)
+	line1.SetMinSize(fyne.NewSize(700, 5))
+	line2 := canvas.NewRectangle(displayGreen)
+	line2.SetMinSize(fyne.NewSize(700, 5))
+	line3 := canvas.NewRectangle(displayGreen)
+	line3.SetMinSize(fyne.NewSize(700, 5))
 
-func scaledNumber(s string) string {
-	// Simple large display - use Unicode box-drawing and spacing for visual impact
-	result := ""
-	for _, ch := range s {
-		switch ch {
-		case '0':
-			result += " ▓▓▓  "
-		case '1':
-			result += "  ▓  "
-		case '2':
-			result += " ▓▓▓  "
-		case '3':
-			result += " ▓▓▓  "
-		case '4':
-			result += " ▓ ▓  "
-		case '5':
-			result += " ▓▓▓  "
-		case '6':
-			result += " ▓▓▓  "
-		case '7':
-			result += " ▓▓▓  "
-		case '8':
-			result += " ▓▓▓  "
-		case '9':
-			result += " ▓▓▓  "
-		case '.':
-			result += " ▪ "
-		default:
-			result += string(ch)
-		}
+	// Build layout
+	var content *fyne.Container
+	if debugMode {
+		content = container.New(layout.NewVBoxLayout(),
+			layout.NewSpacer(),
+			container.NewCenter(title),
+			container.NewCenter(modeIndicator),
+			layout.NewSpacer(),
+			container.NewCenter(line1),
+			layout.NewSpacer(),
+			container.NewCenter(litresHeader),
+			container.NewCenter(p.litresLabel),
+			container.NewCenter(litresUnit),
+			layout.NewSpacer(),
+			container.NewCenter(line2),
+			layout.NewSpacer(),
+			container.NewCenter(amountHeader),
+			container.NewCenter(
+				container.NewHBox(
+					currencySymbol,
+					p.amountLabel,
+				),
+			),
+			layout.NewSpacer(),
+			container.NewCenter(line3),
+			layout.NewSpacer(),
+			container.NewCenter(priceInfo),
+			layout.NewSpacer(),
+			container.NewCenter(statusLabel),
+			layout.NewSpacer(),
+		)
+	} else {
+		content = container.New(layout.NewVBoxLayout(),
+			layout.NewSpacer(),
+			container.NewCenter(title),
+			layout.NewSpacer(),
+			container.NewCenter(line1),
+			layout.NewSpacer(),
+			container.NewCenter(litresHeader),
+			container.NewCenter(p.litresLabel),
+			container.NewCenter(litresUnit),
+			layout.NewSpacer(),
+			container.NewCenter(line2),
+			layout.NewSpacer(),
+			container.NewCenter(amountHeader),
+			container.NewCenter(
+				container.NewHBox(
+					currencySymbol,
+					p.amountLabel,
+				),
+			),
+			layout.NewSpacer(),
+			container.NewCenter(line3),
+			layout.NewSpacer(),
+			container.NewCenter(priceInfo),
+			layout.NewSpacer(),
+			container.NewCenter(statusLabel),
+			layout.NewSpacer(),
+		)
 	}
-	return result
-}
 
-// readKeyAsync continuously reads keyboard input in debug mode
-func readKeyAsync(pump *PetrolPump) {
-	// Set terminal to raw mode for immediate key detection
-	oldState := setRawMode()
-	if oldState != nil {
-		defer restoreMode(oldState)
-	}
+	// Stack background and content
+	w.SetContent(container.NewStack(bg, content))
 
-	buf := make([]byte, 1)
-	for {
-		n, err := os.Stdin.Read(buf)
-		if err != nil || n == 0 {
-			time.Sleep(10 * time.Millisecond)
-			continue
-		}
-
-		switch buf[0] {
-		case ' ': // Space bar - set flag for main loop
-			keyPressed = true
-		case 'r', 'R': // Reset
-			pump.reset()
-			keyPressed = false
-		case 3: // Ctrl+C
-			fmt.Println("\n\nShutting down...")
-			fmt.Printf("Final totals:\n")
-			fmt.Printf("  Litres: %.2f L\n", pump.litres)
-			fmt.Printf("  Amount: $%.2f\n", pump.amount)
-			os.Exit(0)
-		case 27: // ESC
-			fmt.Println("\n\nShutting down...")
-			fmt.Printf("Final totals:\n")
-			fmt.Printf("  Litres: %.2f L\n", pump.litres)
-			fmt.Printf("  Amount: $%.2f\n", pump.amount)
-			os.Exit(0)
-		default:
-			// Release key when any other key is pressed
-			if buf[0] != ' ' {
+	// Handle keyboard in debug mode
+	if debugMode {
+		w.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
+			switch key.Name {
+			case fyne.KeySpace:
+				keyPressed = true
+			case fyne.KeyR:
+				p.reset()
 				keyPressed = false
+			case fyne.KeyEscape:
+				fmt.Printf("\nFinal totals:\n")
+				fmt.Printf("  Litres: %.2f L\n", p.litres)
+				fmt.Printf("  Amount: $%.2f\n", p.amount)
+				a.Quit()
 			}
-		}
+		})
 	}
+
+	return w
 }
 
 func setRawMode() *syscall.Termios {
@@ -242,88 +270,77 @@ func main() {
 	// Try to initialize GPIO
 	err := rpio.Open()
 	if err != nil {
-		// GPIO not available - enter debug mode
+		// GPIO not available - enter debug mode with GRAPHICAL display
 		debugMode = true
 		fmt.Println("╔════════════════════════════════════╗")
 		fmt.Println("║   🔧 DEBUG MODE ACTIVATED 🔧      ║")
 		fmt.Println("╠════════════════════════════════════╣")
 		fmt.Println("║  GPIO not available - using        ║")
-		fmt.Println("║  keyboard input for testing        ║")
+		fmt.Println("║  GRAPHICAL display with keyboard   ║")
 		fmt.Println("║                                    ║")
 		fmt.Println("║  Hold SPACE to pump petrol         ║")
 		fmt.Println("║  Press R to reset                  ║")
-		fmt.Println("║  Press Ctrl+C to exit              ║")
+		fmt.Println("║  Press ESC to exit                 ║")
 		fmt.Println("║                                    ║")
 		fmt.Println("║  Starting in 2 seconds...          ║")
 		fmt.Println("╚════════════════════════════════════╝")
 		time.Sleep(2 * time.Second)
 	} else {
-		// GPIO available - normal mode
+		// GPIO available - normal mode with graphical display
 		defer rpio.Close()
 		button = rpio.Pin(buttonPin)
 		button.Input()
-		button.PullUp() // Use pull-up resistor, button should connect to ground
+		button.PullUp()
 		fmt.Println("✓ GPIO initialized - Running in normal mode")
 		fmt.Println("  Press and hold the button to pump")
 		time.Sleep(1 * time.Second)
 	}
 
-	// Create pump instance
-	pump := NewPetrolPump()
+	// Run graphical mode
+	runGraphicalMode(button)
+}
 
-	// Setup signal handling for clean exit
+func runGraphicalMode(button rpio.Pin) {
+	pump := NewPetrolPump()
+	pump.button = button
+
+	// Create GUI application
+	myApp := app.New()
+	window := pump.createGUIDisplay(myApp)
+
+	// Setup signal handling
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		// Restore terminal
-		fmt.Print("\033[0m\033[2J\033[H")
-		fmt.Println("\n\nShutting down...")
-		fmt.Printf("Final totals:\n")
+		fmt.Printf("\nFinal totals:\n")
 		fmt.Printf("  Litres: %.2f L\n", pump.litres)
 		fmt.Printf("  Amount: $%.2f\n", pump.amount)
-		os.Exit(0)
+		myApp.Quit()
 	}()
 
-	// Start keyboard reader in debug mode
-	if debugMode {
-		go readKeyAsync(pump)
-	}
+	// Start pump monitoring in background
+	go func() {
+		ticker := time.NewTicker(updateInterval)
+		defer ticker.Stop()
 
-	// Create ticker for regular updates
-	ticker := time.NewTicker(updateInterval)
-	defer ticker.Stop()
-
-	// Initial display
-	pump.display()
-
-	// Track if button was just released
-	lastPressed := false
-
-	// Main loop
-	for {
-		select {
-		case <-ticker.C:
+		for {
+			<-ticker.C
 			var buttonPressed bool
 
 			if debugMode {
-				// Debug mode: use keyboard
+				// Debug mode: use keyboard (handled by Fyne event handlers)
 				buttonPressed = keyPressed
 			} else {
 				// Normal mode: use GPIO
 				buttonPressed = button.Read() == rpio.Low
 			}
 
-			// Update display when button is pressed
 			if buttonPressed {
 				pump.increment()
-				pump.display()
-				lastPressed = true
-			} else if lastPressed {
-				// Button was just released, refresh display once
-				pump.display()
-				lastPressed = false
 			}
 		}
-	}
+	}()
+
+	window.ShowAndRun()
 }
