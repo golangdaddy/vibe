@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAN Party Booking System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>LAN Party Booking System</h1>
+        
+        <div class="booking-form">
+            <h2>Book Your LAN Party Spot</h2>
+            <form id="bookingForm">
+                <div class="form-group">
+                    <label for="name">Gamer Tag/Name:</label>
+                    <input type="text" id="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="date">Date:</label>
+                    <input type="date" id="date" required>
+                </div>
+                <div class="form-group">
+                    <label for="time">Start Time:</label>
+                    <input type="time" id="time" required>
+                </div>
+                <div class="form-group">
+                    <label for="duration">Duration (hours):</label>
+                    <input type="number" id="duration" min="2" max="12" value="4" required>
+                </div>
+                <div class="form-group">
+                    <label for="players">Number of Players:</label>
+                    <input type="number" id="players" min="2" max="16" value="4" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Equipment Needed:</label>
+                    <div class="equipment-list">
+                        <div class="equipment-item">
+                            <input type="checkbox" id="pc" name="equipment">
+                            <label for="pc">Gaming PC</label>
+                        </div>
+                        <div class="equipment-item">
+                            <input type="checkbox" id="monitor" name="equipment">
+                            <label for="monitor">Monitor</label>
+                        </div>
+                        <div class="equipment-item">
+                            <input type="checkbox" id="keyboard" name="equipment">
+                            <label for="keyboard">Keyboard</label>
+                        </div>
+                        <div class="equipment-item">
+                            <input type="checkbox" id="mouse" name="equipment">
+                            <label for="mouse">Mouse</label>
+                        </div>
+                        <div class="equipment-item">
+                            <input type="checkbox" id="headset" name="equipment">
+                            <label for="headset">Headset</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Games (Select all that apply):</label>
+                    <div class="games-selection">
+                        <div class="equipment-item">
+                            <input type="checkbox" id="csgo" name="games">
+                            <label for="csgo">CS:GO</label>
+                        </div>
+                        <div class="equipment-item">
+                            <input type="checkbox" id="lol" name="games">
+                            <label for="lol">League of Legends</label>
+                        </div>
+                        <div class="equipment-item">
+                            <input type="checkbox" id="minecraft" name="games">
+                            <label for="minecraft">Minecraft</label>
+                        </div>
+                        <div class="equipment-item">
+                            <input type="checkbox" id="valorant" name="games">
+                            <label for="valorant">Valorant</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="food">Food Preferences:</label>
+                    <textarea id="food" rows="2" placeholder="Any dietary restrictions or food preferences?"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="notes">Additional Notes:</label>
+                    <textarea id="notes" rows="3" placeholder="Any special requests or additional information?"></textarea>
+                </div>
+
+                <button type="submit">Book LAN Party</button>
+            </form>
+        </div>
+
+        <div class="bookings-list">
+            <h2>Current LAN Party Bookings</h2>
+            <div id="bookingsList"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('bookingForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Get equipment selections
+            const equipment = Array.from(document.querySelectorAll('input[name="equipment"]:checked'))
+                .map(input => input.id);
+            
+            // Get game selections
+            const games = Array.from(document.querySelectorAll('input[name="games"]:checked'))
+                .map(input => input.id);
+
+            // Create booking object
+            const booking = {
+                name: document.getElementById('name').value,
+                email: document.getElementById('email').value,
+                date: document.getElementById('date').value,
+                time: document.getElementById('time').value,
+                duration: document.getElementById('duration').value,
+                players: document.getElementById('players').value,
+                equipment: equipment,
+                games: games,
+                food: document.getElementById('food').value,
+                notes: document.getElementById('notes').value,
+                id: Date.now()
+            };
+
+            // Get existing bookings from localStorage
+            let bookings = JSON.parse(localStorage.getItem('bookings')) || [];
+            bookings.push(booking);
+            localStorage.setItem('bookings', JSON.stringify(bookings));
+            
+            this.reset();
+            displayBookings();
+        });
+
+        function displayBookings() {
+            const bookingsList = document.getElementById('bookingsList');
+            const bookings = JSON.parse(localStorage.getItem('bookings')) || [];
+            
+            bookingsList.innerHTML = bookings.map(booking => `
+                <div class="booking-item">
+                    <h3>${booking.name}</h3>
+                    <p>Date: ${booking.date}</p>
+                    <p>Time: ${booking.time} (${booking.duration} hours)</p>
+                    <p>Number of Players: ${booking.players}</p>
+                    <p>Equipment Needed: ${booking.equipment.join(', ') || 'None'}</p>
+                    <p>Games: ${booking.games.join(', ') || 'None'}</p>
+                    <p>Food Preferences: ${booking.food || 'None'}</p>
+                    <p>Notes: ${booking.notes || 'None'}</p>
+                    <button onclick="deleteBooking(${booking.id})">Cancel Booking</button>
+                </div>
+            `).join('');
+        }
+
+        function deleteBooking(id) {
+            let bookings = JSON.parse(localStorage.getItem('bookings')) || [];
+            bookings = bookings.filter(booking => booking.id !== id);
+            localStorage.setItem('bookings', JSON.stringify(bookings));
+            displayBookings();
+        }
+
+        // Display bookings when page loads
+        displayBookings();
+    </script>
+</body>
+</html>
