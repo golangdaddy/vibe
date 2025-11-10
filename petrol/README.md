@@ -1,26 +1,31 @@
 # Toy Petrol Pump Display
 
-A Go program for Raspberry Pi that creates a realistic fullscreen petrol pump display with litres and currency amount. Perfect for toy petrol pump projects!
+A Go program for Raspberry Pi that creates a realistic petrol pump display with litres and currency amount. Features both graphical fullscreen display (on Raspberry Pi) and terminal display (for debugging). Perfect for toy petrol pump projects!
 
 ## Features
 
-- 🖥️ **Fullscreen graphical display** that looks like a real petrol pump
-- 📊 Large digital-style numbers with authentic petrol pump styling
-- 🎨 Green LCD-style display on dark background (classic petrol pump aesthetic)
+- 🖥️ **Dual Display Modes:**
+  - **Graphical Mode** (Raspberry Pi with GPIO): Fullscreen GUI that looks like a real petrol pump
+  - **Terminal Mode** (Debug/Testing): Colored terminal display for development
+- 📊 Large digital-style numbers for litres and amount
+- 🎨 Authentic petrol pump styling (green LCD text on dark background)
 - 🔘 Button-controlled pumping (press and hold to increment)
 - 💰 Configurable price per litre
-- 🔄 Smooth real-time updates
-- 🔧 **Debug mode** for development on laptops without GPIO
+- 🔄 Smooth real-time updates (10 times per second)
+- 🔧 **Automatic mode detection** - no configuration needed!
 
-## Display Preview
+## How It Works
 
-The fullscreen display looks like a real petrol pump with:
-- **Large digital numbers** (120pt) for litres and amount - easy to read from a distance
-- **Bright green LCD-style text** on dark background (authentic petrol pump aesthetic)
-- **Amber section headers** (LITRES and AMOUNT)
-- **Clean, professional layout** with separator lines
-- **Fullscreen immersive experience** - no window borders or distractions
+The program automatically detects your environment:
 
+- **With GPIO (Raspberry Pi)**: Runs in **graphical mode** with fullscreen display
+- **Without GPIO (Laptop)**: Runs in **debug mode** with terminal display
+
+This means you can develop and test on your laptop, then deploy to the Raspberry Pi without changing any code!
+
+## Display Examples
+
+### Graphical Mode (Raspberry Pi)
 ```
 ┌────────────────────────────────────────────────────────────┐
 │                      DARK BACKGROUND                       │
@@ -41,21 +46,60 @@ The fullscreen display looks like a real petrol pump with:
 │             ──────────────────────────────                 │
 │                                                            │
 │                  Rate: $1.50 per litre                     │
-│                                                            │
 │           Press and hold button to pump                    │
 │                                                            │
 └────────────────────────────────────────────────────────────┘
 
-Colors: Dark background (#141414), Bright Green text (#00FF64),
-        Amber headers (#FFC800), White accents (#F0F0F0)
+Fullscreen GUI with 140pt green numbers, amber headers, 
+dark background - looks like a real petrol pump!
+```
+
+### Terminal Mode (Debug/Laptop)
+```
+                    🔧 DEBUG MODE 🔧
+
+              ═══════════════════════════════
+              ║                               ║
+              ║         PETROL PUMP           ║
+              ║                               ║
+              ═══════════════════════════════
+
+                     LITRES
+
+                    ▓ ▓  ▪  ▓▓▓  ▓▓▓
+
+                        L
+
+
+              ───────────────────────────────
+
+
+                     AMOUNT
+
+                      $  ▓ ▓  ▪  ▓▓▓  ▓▓▓
+
+
+              ───────────────────────────────
+
+               Rate: $1.50 per litre
+
+
+          [SPACE] Pump  [R] Reset  [Ctrl+C] Exit
+
+Colored terminal display for easy testing on your laptop!
 ```
 
 ## Hardware Requirements
 
+### For Raspberry Pi (Full Setup)
 - Raspberry Pi (64-bit) - tested on Pi 3/4/5
 - Display (HDMI monitor or official touchscreen)
 - Push button connected to GPIO Pin 1 (BCM numbering)
 - Button wiring: Connect one side to GPIO Pin 1, other side to Ground (GND)
+
+### For Development/Testing (Laptop)
+- Any Linux machine (no special hardware needed!)
+- Just a keyboard for testing
 
 ## Wiring Diagram
 
@@ -78,112 +122,106 @@ The program uses internal pull-up resistors, so no external resistors are needed
 
 ### Prerequisites
 
-**Check your system first:**
-```bash
-# Run the dependency checker script
-./check-deps.sh
-```
-
-**On Raspberry Pi:**
+**On Raspberry Pi (for graphical mode):**
 ```bash
 # Install required system libraries for GUI
 sudo apt-get update
 sudo apt-get install -y libgl1-mesa-dev xorg-dev build-essential pkg-config
 ```
 
-**On Linux laptop (for development):**
+**On Linux laptop (for terminal debug mode):**
 ```bash
-# Install required system libraries
-sudo apt-get install -y libgl1-mesa-dev xorg-dev build-essential pkg-config
+# No special dependencies needed! Just Go.
 ```
-
-**Note:** The GUI requires OpenGL and X11 libraries. If you're on a headless system or don't want to install GUI dependencies, this program won't work without a display server.
 
 ### Install Go
 
 If you don't have Go installed:
+
+**For Raspberry Pi (ARM64):**
 ```bash
-# For Raspberry Pi (ARM64)
 wget https://go.dev/dl/go1.21.linux-arm64.tar.gz
 sudo tar -C /usr/local -xzf go1.21.linux-arm64.tar.gz
+export PATH=$PATH:/usr/local/go/bin
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+```
 
-# For Linux laptop (AMD64)
+**For Linux laptop (AMD64):**
+```bash
 wget https://go.dev/dl/go1.21.linux-amd64.tar.gz
 sudo tar -C /usr/local -xzf go1.21.linux-amd64.tar.gz
-
-# Add to PATH
 export PATH=$PATH:/usr/local/go/bin
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 ```
 
 ### Build the Program
 
-1. **Clone or copy this project**
-
-2. **Install dependencies**:
 ```bash
 cd /path/to/petrol
 go mod download
-```
-
-3. **Build the program**:
-```bash
 go build -o petrol-pump
 ```
 
 ## Usage
 
-### On Raspberry Pi
+### On Raspberry Pi (Graphical Mode)
 
-Run the program with sudo (required for GPIO access):
+Run with sudo (required for GPIO access):
 
 ```bash
 sudo ./petrol-pump
 ```
 
-The display will open in fullscreen mode. Connect your display to the Raspberry Pi and it will look like a real petrol pump!
+The program will:
+- Detect GPIO hardware
+- Launch fullscreen graphical display
+- Wait for button press to increment the pump
 
-### On Your Laptop (Debug Mode)
+**Controls:**
+- **Press and hold the button**: Pumps petrol (increments litres and amount)
+- **Ctrl+C**: Exit and display final totals
 
-The program automatically detects if GPIO is unavailable and runs in debug mode:
+### On Your Laptop (Terminal Debug Mode)
+
+Just run normally (no sudo needed):
 
 ```bash
 ./petrol-pump
 ```
 
-In debug mode, the display shows "DEBUG MODE" in red and uses keyboard controls.
+The program will:
+- Detect NO GPIO hardware
+- Launch terminal-based display
+- Use keyboard input for testing
 
-### Controls
-
-**On Raspberry Pi (Normal Mode):**
-- **Press and hold the button**: Pumps petrol (increments litres and amount)
-- **Ctrl+C**: Exit and display final totals
-
-**In Debug Mode (Laptop):**
+**Controls:**
 - **Hold SPACE bar**: Pumps petrol (increments litres and amount)
 - **Press 'R'**: Reset the pump to zero
-- **ESC or Ctrl+C**: Exit the program
+- **Ctrl+C or ESC**: Exit the program
 
-### Customization
+## Customization
 
-Edit the constants at the top of `main.go` to customize:
+Edit the constants at the top of `main.go`:
 
 ```go
 const (
     buttonPin = 1             // GPIO pin number (BCM numbering)
     pricePerLitre = 1.50      // Currency per litre
-    incrementRate = 0.1       // Litres added per increment
+    incrementRate = 0.1       // Litres added per increment (0.1 L = 100 mL)
     updateInterval = 100ms    // Update frequency (10 times per second)
 )
 ```
 
-You can also customize the colors by editing the color variables:
+### Customize Colors
+
+Edit the color variables for graphical mode:
+
 ```go
 var (
     displayBg    = color.RGBA{R: 20, G: 20, B: 20, A: 255}      // Dark background
     displayGreen = color.RGBA{R: 0, G: 255, B: 100, A: 255}     // Bright green
     displayAmber = color.RGBA{R: 255, G: 200, B: 0, A: 255}     // Amber/yellow
-    // ...
+    displayWhite = color.RGBA{R: 240, G: 240, B: 240, A: 255}   // Off-white
 )
 ```
 
@@ -223,71 +261,91 @@ xserver-command=X -nocursor
 
 ## Troubleshooting
 
-### "Error opening GPIO"
+### "Error opening GPIO" or goes to debug mode unexpectedly
 - Make sure you're running with `sudo` on Raspberry Pi
 - Verify you're on a Raspberry Pi with GPIO support
-- **OR** - The program will automatically enter debug mode for testing on laptops
+- **This is NORMAL on a laptop** - it will use terminal mode for testing
 
 ### Button not responding (Raspberry Pi)
 - Check your wiring: GPIO Pin 1 to button, button to GND
 - Verify you're using BCM pin numbering (not physical pin numbers)
 - Try a different GPIO pin and update `buttonPin` in the code
+- Test with a multimeter to verify the button is working
 
 ### Keyboard not responding (Debug Mode)
-- Make sure the display window has focus (click on it)
-- Press and hold SPACE bar firmly
-- The window must be active to receive keyboard input
+- Make sure the terminal window has focus (click on it)
+- Hold the SPACE bar down (don't just tap it)
+- Try pressing and releasing 'R' to reset and test
 
-### Display window is black or not showing
-- Make sure you have the required graphics libraries installed
-- Try running in a graphical environment (not just terminal)
-- Check that X11 or Wayland is running: `echo $DISPLAY`
+### Graphical display not showing on Raspberry Pi
+- Make sure you installed the required libraries: `sudo apt-get install libgl1-mesa-dev xorg-dev`
+- Ensure you're running in a graphical environment (not headless)
+- Try: `echo $DISPLAY` - should output `:0` or similar
+- Make sure X11 is running: `ps aux | grep X`
 
-### "cannot open display" error
-- Make sure you're running in a graphical environment
-- On Raspberry Pi, make sure you're in the desktop environment
-- Try: `export DISPLAY=:0` before running
-
-### Build errors about missing libraries
-- Install required system libraries (see Prerequisites above)
+### Build errors about missing libraries (on Raspberry Pi)
+- Install required system libraries: `sudo apt-get install libgl1-mesa-dev xorg-dev build-essential pkg-config`
 - Run `go mod download` to fetch Go dependencies
+- Make sure you have GCC installed: `sudo apt-get install build-essential`
 
-## Debug Mode
-
-Debug mode is automatically activated when GPIO hardware is not detected (like on a laptop). This allows you to:
-- Test and refine the display without a Raspberry Pi
-- Use keyboard input (SPACE bar) to simulate button presses
-- Develop and iterate on the UI quickly
-- Test the fullscreen display on your development machine
-
-The display will show "DEBUG MODE" in red at the top when running in this mode.
+### Terminal display looks garbled (Debug mode)
+- Make sure your terminal supports UTF-8 and ANSI colors
+- Try a different terminal emulator
+- Maximize the terminal window for best results
 
 ## GPIO Pin Reference
 
 This project uses BCM (Broadcom) GPIO numbering:
 - **GPIO Pin 1** (not physical pin 1) is used by default
 - Physical pin locations vary by Pi model
-- Use `gpio readall` command to see pin mappings on your Pi
+- Use `gpio readall` or `pinout` command to see pin mappings on your Pi
+
+## Development Workflow
+
+1. **Develop on your laptop** using terminal debug mode:
+   ```bash
+   ./petrol-pump  # Test with SPACE bar
+   ```
+
+2. **Transfer to Raspberry Pi** when ready:
+   ```bash
+   scp petrol-pump pi@raspberrypi.local:~/
+   ```
+
+3. **Run on Raspberry Pi** with graphical display:
+   ```bash
+   ssh pi@raspberrypi.local
+   sudo ./petrol-pump  # Uses button and GUI
+   ```
+
+No code changes needed - it automatically detects the environment!
 
 ## Tips for Toy Petrol Pump Projects
 
-- **Use a larger monitor** for more impressive display (even an old TV works great!)
+- **Display size matters!** Use a larger monitor (even an old TV) for more impressive effect
 - Mount the Raspberry Pi inside your toy pump casing
-- Use a large arcade-style button for easier pressing by kids
-- Add sound effects with a speaker (buzzer or USB speaker)
-- Add LED indicators around the display for extra flair
-- 3D print a custom enclosure to mount the display and button
-- Use the official Raspberry Pi touchscreen for a compact all-in-one solution
-- Consider adding a physical "nozzle" prop that must be "lifted" before pumping works
+- Use a large arcade-style button (easier for kids to press)
+- Add sound effects with a speaker or buzzer
+- Add LED strips around the display for extra effect
+- 3D print a custom enclosure
+- Use the official Raspberry Pi touchscreen for compact all-in-one
+- Add a physical "nozzle" prop connected to another GPIO pin
+- Consider adding a "receipt printer" using thermal printer
 
-## Display Specifications
+## Technical Details
 
-The graphical display uses:
-- **Font sizes:** 120pt for main numbers, 48pt for titles, 36pt for labels
+### Display Specifications (Graphical Mode)
+- **Font sizes:** 140pt for main numbers, 56pt for title, 42pt for headers
 - **Color scheme:** Dark background (#141414) with bright green (#00FF64) digits
-- **Layout:** Centered fullscreen with vertical organization
+- **Layout:** Fullscreen centered with vertical organization
 - **Update rate:** 10 times per second (100ms refresh)
-- **Resolution:** Adapts to any screen size/resolution
+- **Resolution:** Adapts to any screen size/resolution automatically
+
+### Display Specifications (Terminal Mode)
+- **Colors:** 24-bit RGB ANSI escape sequences
+- **Font:** Uses terminal's default font with Unicode block characters
+- **Layout:** Centered for 80-column terminals
+- **Update rate:** 10 times per second (100ms refresh)
 
 ## License
 
