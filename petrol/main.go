@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"github.com/stianeikeland/go-rpio/v4"
 )
 
@@ -51,6 +52,24 @@ var (
 	// Digital font resource
 	digitalFontResource fyne.Resource
 )
+
+// customTheme wraps the default dark theme but uses our custom digital font
+type customTheme struct {
+	fyne.Theme
+}
+
+func newCustomTheme() fyne.Theme {
+	return &customTheme{Theme: theme.DarkTheme()}
+}
+
+func (ct *customTheme) Font(style fyne.TextStyle) fyne.Resource {
+	// Use digital font for monospace text (our numbers)
+	if style.Monospace && digitalFontResource != nil {
+		return digitalFontResource
+	}
+	// Fall back to default for everything else
+	return ct.Theme.Font(style)
+}
 
 type PetrolPump struct {
 	litres      float64
@@ -546,6 +565,9 @@ func runGraphicalMode(button rpio.Pin) {
 
 	// Create GUI application
 	myApp := app.New()
+	
+	// Set custom theme to use digital font
+	myApp.Settings().SetTheme(newCustomTheme())
 
 	// Show splash screen first
 	splashWindow := createSplashScreen(myApp)
