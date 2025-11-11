@@ -17,13 +17,17 @@ import (
 )
 
 const (
-	// GPIO pin for button (BCM numbering)
+	// GPIO pin 17 for button (BCM numbering)
 	buttonPin = 17
 
 	// Pump settings
 	pricePerLitre  = 1.50                  // Currency per litre
 	incrementRate  = 0.01                  // Litres added per increment
 	updateInterval = 10 * time.Millisecond // How often to check button and update display
+
+	// Splash screen settings
+	splashDuration = 3 * time.Second // How long to show splash screen
+	logoPath       = "images/logo.png"
 )
 
 var (
@@ -247,6 +251,48 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	return w
 }
 
+func createSplashScreen(a fyne.App) fyne.Window {
+	w := a.NewWindow("Petrol Pump")
+	w.SetFullScreen(true)
+
+	// White background
+	bg := canvas.NewRectangle(color.White)
+
+	// Try to load logo image
+	var logoWidget fyne.CanvasObject
+	if _, err := os.Stat(logoPath); err == nil {
+		// Logo file exists
+		img := canvas.NewImageFromFile(logoPath)
+		img.FillMode = canvas.ImageFillContain
+		img.SetMinSize(fyne.NewSize(400, 400))
+		logoWidget = img
+	} else {
+		// Logo file doesn't exist, show placeholder text
+		placeholder := canvas.NewText("PETROL PUMP", displayBg)
+		placeholder.TextSize = 72
+		placeholder.Alignment = fyne.TextAlignCenter
+		placeholder.TextStyle = fyne.TextStyle{Bold: true}
+		logoWidget = placeholder
+	}
+
+	// Loading text
+	loadingText := canvas.NewText("Loading...", color.RGBA{R: 100, G: 100, B: 100, A: 255})
+	loadingText.TextSize = 24
+	loadingText.Alignment = fyne.TextAlignCenter
+
+	// Layout
+	content := container.New(layout.NewVBoxLayout(),
+		layout.NewSpacer(),
+		container.NewCenter(logoWidget),
+		layout.NewSpacer(),
+		container.NewCenter(loadingText),
+		layout.NewSpacer(),
+	)
+
+	w.SetContent(container.NewStack(bg, content))
+	return w
+}
+
 func main() {
 	var button rpio.Pin
 
@@ -289,9 +335,32 @@ func runGraphicalMode(button rpio.Pin) {
 
 	// Create GUI application
 	myApp := app.New()
-	window := pump.createGUIDisplay(myApp)
 
-	// Setup signal handling
+	// Show splash screen first
+	splashWindow := createSplashScreen(myApp)
+	splashWindow.Show()
+
+	// After splash duration, switch to main pump display
+	go func() {
+		time.Sleep(splashDuration)
+		splashWindow.Hide()
+
+		// Create and show main window
+		mainWindow := pump.createGUIDisplay(myApp)
+		mainWindow.Show()
+
+		// Setup signal handling after main window is shown
+		setupSignalHandling(myApp, pump)
+
+		// Start pump monitoring
+		startPumpMonitoring(pump, button)
+	}()
+
+	myApp.Run()
+}
+
+func setupSignalHandling(myApp fyne.App, pump *PetrolPump) {
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -301,8 +370,9 @@ func runGraphicalMode(button rpio.Pin) {
 		fmt.Printf("  Amount: $%.2f\n", pump.amount)
 		myApp.Quit()
 	}()
+}
 
-	// Start pump monitoring in background
+func startPumpMonitoring(pump *PetrolPump, button rpio.Pin) {
 	go func() {
 		ticker := time.NewTicker(updateInterval)
 		defer ticker.Stop()
@@ -328,6 +398,4 @@ func runGraphicalMode(button rpio.Pin) {
 			}
 		}
 	}()
-
-	window.ShowAndRun()
 }

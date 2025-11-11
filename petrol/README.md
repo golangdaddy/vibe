@@ -7,6 +7,7 @@ A Go program for Raspberry Pi that creates a realistic petrol pump display with 
 - 🖥️ **Dual Display Modes:**
   - **Graphical Mode** (Raspberry Pi with GPIO): Fullscreen GUI that looks like a real petrol pump
   - **Terminal Mode** (Debug/Testing): Colored terminal display for development
+- 🎨 **Splash Screen** with custom logo on startup
 - 📊 Large digital-style numbers for litres and amount
 - 🎨 Authentic petrol pump styling (green LCD text on dark background)
 - 🔘 Button-controlled pumping (press and hold to increment)
@@ -202,16 +203,31 @@ The program will:
 - **Press ESC**: Exit the program
 - **Ctrl+C**: Exit from terminal
 
+## Adding Your Logo
+
+1. Create or obtain a logo image (PNG format recommended)
+2. Name it `logo.png`
+3. Place it in the `images/` directory
+4. The logo will automatically appear on the splash screen when you start the program
+
+**Logo specifications:**
+- Format: PNG (transparency supported)
+- Recommended size: 400x400 pixels or larger
+- The logo is displayed centered on a white background for 3 seconds
+
+If no logo is found, the program displays "PETROL PUMP" text as a placeholder.
+
 ## Customization
 
 Edit the constants at the top of `main.go`:
 
 ```go
 const (
-    buttonPin = 1             // GPIO pin number (BCM numbering)
+    buttonPin = 17            // GPIO pin number (BCM numbering)
     pricePerLitre = 1.50      // Currency per litre
-    incrementRate = 0.1       // Litres added per increment (0.1 L = 100 mL)
-    updateInterval = 100ms    // Update frequency (10 times per second)
+    incrementRate = 0.01      // Litres added per increment (0.01 L = 10 mL)
+    updateInterval = 10ms     // Update frequency (100 times per second)
+    splashDuration = 3s       // How long to show splash screen
 )
 ```
 
