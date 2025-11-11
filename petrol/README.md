@@ -11,6 +11,8 @@ A Go program for Raspberry Pi that creates a realistic petrol pump display with 
 - 📊 Large digital-style numbers for litres and amount
 - 🎨 Authentic petrol pump styling (green LCD text on dark background)
 - 🔘 Button-controlled pumping (press and hold to increment)
+- 💳 **Touchscreen Pay Button** - large, accessible button to complete transaction and reset
+- 🔒 Smart button state - Pay button disables during pumping, enables when stopped
 - 💰 Configurable price per litre
 - 🔄 Smooth real-time updates (10 times per second)
 - 🔧 **Automatic mode detection** - no configuration needed!
@@ -94,9 +96,11 @@ Colored terminal display for easy testing on your laptop!
 
 ### For Raspberry Pi (Full Setup)
 - Raspberry Pi (64-bit) - tested on Pi 3/4/5
-- Display (HDMI monitor or official touchscreen)
-- Push button connected to GPIO Pin 1 (BCM numbering)
-- Button wiring: Connect one side to GPIO Pin 1, other side to Ground (GND)
+- **1024x600 Touchscreen Display** (7" or 10" HDMI/DSI touchscreen)
+  - Display is optimized for 1024x600 resolution
+  - Works with any size display, but sized perfectly for 1024x600
+- Push button connected to GPIO Pin 17 (BCM numbering)
+- Button wiring: Connect one side to GPIO Pin 17, other side to Ground (GND)
 
 ### For Development/Testing (Laptop)
 - Any Linux machine (no special hardware needed!)
@@ -180,9 +184,16 @@ The program will:
 
 **Controls:**
 - **Press and hold the button**: Pumps petrol (increments litres and amount)
+- **Tap PAY button**: Complete transaction and reset pump (touchscreen)
 - **Press R**: Reset the pump to zero (keyboard shortcut)
 - **Press ESC**: Exit the program (keyboard shortcut)
 - **Ctrl+C**: Exit and display final totals (terminal)
+
+**Pay Button Behavior:**
+- Starts **disabled** (gray) when amounts are zero
+- **Disables** automatically while pumping is active
+- **Enables** (bright green) when pumping stops and there's an amount to pay
+- Tap to reset litres and amount to zero
 
 ### On Your Laptop (Terminal Debug Mode)
 
@@ -199,9 +210,12 @@ The program will:
 
 **Controls:**
 - **Hold SPACE bar**: Pumps petrol (increments litres and amount)
-- **Press R**: Reset the pump to zero
+- **Tap PAY button**: Complete transaction and reset pump (on-screen touchscreen button)
+- **Press R**: Reset the pump to zero (keyboard shortcut)
 - **Press ESC**: Exit the program
 - **Ctrl+C**: Exit from terminal
+
+**Pay Button:** The green PAY button appears on screen and works with mouse clicks (simulating touchscreen taps in debug mode)
 
 ## Adding Your Logo
 
@@ -341,24 +355,27 @@ No code changes needed - it automatically detects the environment!
 
 ## Tips for Toy Petrol Pump Projects
 
-- **Display size matters!** Use a larger monitor (even an old TV) for more impressive effect
+- **Recommended touchscreen:** 7" 1024x600 HDMI touchscreen (perfect size and resolution!)
 - Mount the Raspberry Pi inside your toy pump casing
 - Use a large arcade-style button (easier for kids to press)
 - Add sound effects with a speaker or buzzer
 - Add LED strips around the display for extra effect
 - 3D print a custom enclosure
-- Use the official Raspberry Pi touchscreen for compact all-in-one
+- The PAY button is sized perfectly for small fingers on a touchscreen
 - Add a physical "nozzle" prop connected to another GPIO pin
 - Consider adding a "receipt printer" using thermal printer
+- Mount the touchscreen behind clear acrylic for protection
 
 ## Technical Details
 
 ### Display Specifications (Graphical Mode)
-- **Font sizes:** 140pt for main numbers, 56pt for title, 42pt for headers
+- **Optimized for:** 1024x600 touchscreen displays
+- **Font sizes:** 100pt for main numbers, 48pt for title, 32pt for headers
+- **Pay button:** 350x70 pixels with 38pt text - perfect for touchscreen tapping
 - **Color scheme:** Dark background (#141414) with bright green (#00FF64) digits
 - **Layout:** Fullscreen centered with vertical organization
-- **Update rate:** 10 times per second (100ms refresh)
-- **Resolution:** Adapts to any screen size/resolution automatically
+- **Update rate:** 10 times per second (10ms refresh)
+- **Resolution:** Works on any resolution, optimized for 1024x600
 
 ### Display Specifications (Terminal Mode)
 - **Colors:** 24-bit RGB ANSI escape sequences
