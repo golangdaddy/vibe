@@ -18,19 +18,19 @@ import (
 
 const (
 	// GPIO pin for button (BCM numbering)
-	buttonPin = 1
+	buttonPin = 17
 
 	// Pump settings
-	pricePerLitre  = 1.50                   // Currency per litre
-	incrementRate  = 0.01                    // Litres added per increment
+	pricePerLitre  = 1.50                  // Currency per litre
+	incrementRate  = 0.01                  // Litres added per increment
 	updateInterval = 10 * time.Millisecond // How often to check button and update display
 )
 
 var (
-	debugMode         = false
-	keyPressed        = false
-	lastKeyPressTime  = time.Time{}
-	keyPressTimeout   = 150 * time.Millisecond // If no key press in this time, assume key is released
+	debugMode        = false
+	keyPressed       = false
+	lastKeyPressTime = time.Time{}
+	keyPressTimeout  = 150 * time.Millisecond // If no key press in this time, assume key is released
 
 	// Colors for petrol pump display
 	displayBg    = color.RGBA{R: 20, G: 20, B: 20, A: 255}
