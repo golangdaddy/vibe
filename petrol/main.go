@@ -28,6 +28,11 @@ const (
 	// Splash screen settings
 	splashDuration = 3 * time.Second // How long to show splash screen
 	logoPath       = "images/logo.png"
+
+	// Digital font paths (will try in order)
+	digitalFontPath1 = "fonts/digital.ttf"
+	digitalFontPath2 = "/usr/share/fonts/truetype/dseg/DSEG7Classic-Bold.ttf"
+	digitalFontPath3 = "/usr/local/share/fonts/DSEG7Classic-Bold.ttf"
 )
 
 var (
@@ -42,6 +47,9 @@ var (
 	displayAmber = color.RGBA{R: 255, G: 200, B: 0, A: 255}
 	displayWhite = color.RGBA{R: 240, G: 240, B: 240, A: 255}
 	displayRed   = color.RGBA{R: 255, G: 50, B: 50, A: 255}
+
+	// Digital font resource
+	digitalFontResource fyne.Resource
 )
 
 type PetrolPump struct {
@@ -264,10 +272,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	}
 
 	// LITRES display - value and unit on same line
-	p.litresLabel = canvas.NewText("0.00", displayGreen)
-	p.litresLabel.TextSize = 110
-	p.litresLabel.Alignment = fyne.TextAlignCenter
-	p.litresLabel.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+	p.litresLabel = createDigitalText("0.00", displayGreen, 110)
 
 	litresUnit := canvas.NewText("L", displayGreen)
 	litresUnit.TextSize = 110
@@ -280,10 +285,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	currencySymbol.Alignment = fyne.TextAlignCenter
 	currencySymbol.TextStyle = fyne.TextStyle{Bold: true}
 
-	p.amountLabel = canvas.NewText("0.00", displayGreen)
-	p.amountLabel.TextSize = 110
-	p.amountLabel.Alignment = fyne.TextAlignCenter
-	p.amountLabel.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+	p.amountLabel = createDigitalText("0.00", displayGreen, 110)
 
 	// Price per litre indicator - optimized for 1024x600
 	priceInfo := canvas.NewText(fmt.Sprintf("Rate: $%.2f per litre", pricePerLitre), displayWhite)
@@ -306,7 +308,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 		statusLabel := canvas.NewText("Hold SPACE to pump • Press R to reset • ESC to exit", displayWhite)
 		statusLabel.TextSize = 18
 		statusLabel.Alignment = fyne.TextAlignCenter
-		
+
 		content = container.New(layout.NewVBoxLayout(),
 			layout.NewSpacer(),
 			container.NewCenter(title),
@@ -444,8 +446,66 @@ func createSplashScreen(a fyne.App) fyne.Window {
 	return w
 }
 
+// createDigitalText creates a text widget with digital font if available
+func createDigitalText(text string, col color.Color, size float32) *canvas.Text {
+	txt := canvas.NewText(text, col)
+	txt.TextSize = size
+	txt.Alignment = fyne.TextAlignCenter
+
+	if digitalFontResource != nil {
+		// Use custom digital font
+		txt.TextStyle = fyne.TextStyle{}
+
+		// Create custom text with font
+		customTxt := &canvas.Text{
+			Text:      text,
+			Color:     col,
+			TextSize:  size,
+			Alignment: fyne.TextAlignCenter,
+			TextStyle: fyne.TextStyle{},
+		}
+
+		// Set custom font - this requires using widget.NewRichTextFromMarkdown approach
+		// For now, using monospace as fallback since Fyne's canvas.Text doesn't support custom fonts directly
+		customTxt.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+		return customTxt
+	}
+
+	// Fallback to monospace
+	txt.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+	return txt
+}
+
+// loadDigitalFont tries to load digital display font from various locations
+func loadDigitalFont() {
+	fontPaths := []string{
+		digitalFontPath1,
+		digitalFontPath2,
+		digitalFontPath3,
+		"fonts/DSEG7Classic-Bold.ttf",
+		"/usr/share/fonts/truetype/DSEG7Classic-Bold.ttf",
+	}
+
+	for _, path := range fontPaths {
+		if data, err := os.ReadFile(path); err == nil {
+			digitalFontResource = fyne.NewStaticResource("digital", data)
+			fmt.Printf("✓ Loaded digital font from: %s\n", path)
+			return
+		}
+	}
+
+	fmt.Println("ℹ Digital font (DSEG7) not found")
+	fmt.Println("  Using monospace font as fallback")
+	fmt.Println("  To use DSEG7, install it to one of:")
+	fmt.Println("    - fonts/DSEG7Classic-Bold.ttf")
+	fmt.Println("    - /usr/share/fonts/truetype/dseg/DSEG7Classic-Bold.ttf")
+}
+
 func main() {
 	var button rpio.Pin
+
+	// Load digital font if available
+	loadDigitalFont()
 
 	// Try to initialize GPIO
 	err := rpio.Open()

@@ -133,11 +133,18 @@ The program uses internal pull-up resistors, so no external resistors are needed
 # Install required system libraries for GUI
 sudo apt-get update
 sudo apt-get install -y libgl1-mesa-dev xorg-dev build-essential pkg-config
+
+# Install DSEG7 font for digital display
+sudo apt-get install -y fonts-dseg
 ```
 
-**On Linux laptop (for terminal debug mode):**
+**On Linux laptop (for debug mode):**
 ```bash
-# No special dependencies needed! Just Go.
+# Install GUI libraries for testing
+sudo apt-get install -y libgl1-mesa-dev xorg-dev build-essential pkg-config
+
+# Install DSEG7 font for digital display
+sudo apt-get install -y fonts-dseg
 ```
 
 ### Install Go
@@ -160,7 +167,25 @@ export PATH=$PATH:/usr/local/go/bin
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 ```
 
-### Build the Program
+### Quick Setup (Recommended)
+
+Use the Makefile for automatic setup:
+
+```bash
+cd /path/to/petrol
+
+# One-time setup: install font, configure system, and build
+make setup
+
+# Or step by step:
+make install-font      # Copy DSEG7 font to project
+make setup-fontconfig  # Configure system to use DSEG7
+make build            # Build the program
+```
+
+### Manual Build
+
+If you prefer manual setup:
 
 ```bash
 cd /path/to/petrol
@@ -168,7 +193,31 @@ go mod download
 go build -o petrol-pump
 ```
 
+### Verify Font Installation
+
+Test that DSEG7 digital font is properly installed:
+
+```bash
+make test-font
+```
+
+You should see:
+```
+✓ fonts/digital.ttf exists
+✓ DSEG7 is configured correctly!
+```
+
 ## Usage
+
+### Quick Start
+
+```bash
+# Build and run in one command
+make run
+
+# Or manually
+./petrol-pump
+```
 
 ### On Raspberry Pi (Graphical Mode)
 
@@ -176,6 +225,9 @@ Run with sudo (required for GPIO access):
 
 ```bash
 sudo ./petrol-pump
+
+# Or with make
+sudo make run
 ```
 
 The program will:
@@ -340,16 +392,39 @@ This project uses BCM (Broadcom) GPIO numbering:
 - Physical pin locations vary by Pi model
 - Use `gpio readall` or `pinout` command to see pin mappings on your Pi
 
+## Makefile Commands
+
+The project includes a comprehensive Makefile for easy setup and building:
+
+```bash
+make              # Install font and build program
+make setup        # Full setup (font + fontconfig + build)
+make build        # Build the program
+make run          # Build and run the program
+make install-font # Install DSEG7 font to project
+make setup-fontconfig # Configure system to use DSEG7
+make test-font    # Test font configuration
+make clean        # Remove build artifacts
+make clean-all    # Remove build artifacts and font
+make help         # Show help message
+```
+
+**Most useful commands:**
+- `make setup` - First time setup
+- `make run` - Build and run
+- `make test-font` - Verify font is working
+
 ## Development Workflow
 
-1. **Develop on your laptop** using terminal debug mode:
+1. **Develop on your laptop** using debug mode:
    ```bash
-   ./petrol-pump  # Test with SPACE bar
+   make run  # Test with SPACE bar
    ```
 
 2. **Transfer to Raspberry Pi** when ready:
    ```bash
    scp petrol-pump pi@raspberrypi.local:~/
+   scp -r fonts pi@raspberrypi.local:~/
    ```
 
 3. **Run on Raspberry Pi** with graphical display:
@@ -377,13 +452,17 @@ No code changes needed - it automatically detects the environment!
 
 ### Display Specifications (Graphical Mode)
 - **Optimized for:** 1024x600 touchscreen displays
-- **Font sizes:** 110pt for main numbers with units, 48pt for title
+- **Font style:** Digital alarm clock appearance with bold monospace
+  - Numbers: 110pt bold monospace in bright green (#00FF64)
+  - DSEG7 Classic font installed in `fonts/digital.ttf`
+  - Optimized for readability at a distance
+  - Similar to petrol pump and alarm clock displays
 - **Layout:** Clean design - values and units on same line, no subheadings
 - **Pay button:** 400x75 pixels Bootstrap-style with shadow effect and 42pt text
   - Green (#28C850) when enabled, Gray (#6C757D) when disabled
   - Darkens when tapped for visual feedback
   - 4px shadow offset for depth
-- **Color scheme:** Dark background (#141414) with bright green (#00FF64) digits
+- **Color scheme:** Dark background (#141414) with bright green digits
 - **Update rate:** 10 times per second (10ms refresh)
 - **Resolution:** Works on any resolution, optimized for 1024x600
 
