@@ -179,7 +179,9 @@ The program will:
 
 **Controls:**
 - **Press and hold the button**: Pumps petrol (increments litres and amount)
-- **Ctrl+C**: Exit and display final totals
+- **Press R**: Reset the pump to zero (keyboard shortcut)
+- **Press ESC**: Exit the program (keyboard shortcut)
+- **Ctrl+C**: Exit and display final totals (terminal)
 
 ### On Your Laptop (Terminal Debug Mode)
 
@@ -196,8 +198,9 @@ The program will:
 
 **Controls:**
 - **Hold SPACE bar**: Pumps petrol (increments litres and amount)
-- **Press 'R'**: Reset the pump to zero
-- **Ctrl+C or ESC**: Exit the program
+- **Press R**: Reset the pump to zero
+- **Press ESC**: Exit the program
+- **Ctrl+C**: Exit from terminal
 
 ## Customization
 

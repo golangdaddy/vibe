@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -141,10 +140,10 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	if debugMode {
 		statusText = "Hold SPACE to pump • Press R to reset • ESC to exit"
 	} else {
-		statusText = "Press and hold button to pump"
+		statusText = "Press and hold button to pump • R = reset • ESC = exit"
 	}
 	statusLabel := canvas.NewText(statusText, displayWhite)
-	statusLabel.TextSize = 28
+	statusLabel.TextSize = 26
 	statusLabel.Alignment = fyne.TextAlignCenter
 
 	// Decorative separator lines
@@ -219,49 +218,30 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	// Stack background and content
 	w.SetContent(container.NewStack(bg, content))
 
-	// Handle keyboard in debug mode
-	if debugMode {
-		w.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
-			switch key.Name {
-			case fyne.KeySpace:
+	// Handle keyboard - ESC and R work in both modes, SPACE only in debug mode
+	w.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
+		switch key.Name {
+		case fyne.KeySpace:
+			// Only allow SPACE to pump in debug mode
+			if debugMode {
 				keyPressed = true
-			case fyne.KeyR:
-				p.reset()
-				keyPressed = false
-			case fyne.KeyEscape:
-				fmt.Printf("\nFinal totals:\n")
-				fmt.Printf("  Litres: %.2f L\n", p.litres)
-				fmt.Printf("  Amount: $%.2f\n", p.amount)
-				a.Quit()
 			}
-		})
-	}
+		case fyne.KeyR:
+			// Reset works in both modes
+			p.reset()
+			if debugMode {
+				keyPressed = false
+			}
+		case fyne.KeyEscape:
+			// ESC to exit works in both modes
+			fmt.Printf("\nFinal totals:\n")
+			fmt.Printf("  Litres: %.2f L\n", p.litres)
+			fmt.Printf("  Amount: $%.2f\n", p.amount)
+			a.Quit()
+		}
+	})
 
 	return w
-}
-
-func setRawMode() *syscall.Termios {
-	var oldState syscall.Termios
-	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(syscall.Stdin), syscall.TCGETS, uintptr(unsafe.Pointer(&oldState))); err != 0 {
-		return nil
-	}
-
-	newState := oldState
-	newState.Lflag &^= syscall.ICANON | syscall.ECHO
-	newState.Cc[syscall.VMIN] = 1
-	newState.Cc[syscall.VTIME] = 0
-
-	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(syscall.Stdin), syscall.TCSETS, uintptr(unsafe.Pointer(&newState))); err != 0 {
-		return nil
-	}
-
-	return &oldState
-}
-
-func restoreMode(oldState *syscall.Termios) {
-	if oldState != nil {
-		syscall.Syscall(syscall.SYS_IOCTL, uintptr(syscall.Stdin), syscall.TCSETS, uintptr(unsafe.Pointer(oldState)))
-	}
 }
 
 func main() {
