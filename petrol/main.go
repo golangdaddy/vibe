@@ -118,11 +118,11 @@ func (p *PetrolPump) stopPumping() {
 
 func (p *PetrolPump) updateGUIDisplay() {
 	if p.litresLabel != nil {
-		p.litresLabel.Text = fmt.Sprintf("%.2f", p.litres)
+		p.litresLabel.Text = fmt.Sprintf("%06.2f", p.litres)
 		p.litresLabel.Refresh()
 	}
 	if p.amountLabel != nil {
-		p.amountLabel.Text = fmt.Sprintf("%.2f", p.amount)
+		p.amountLabel.Text = fmt.Sprintf("%06.2f", p.amount)
 		p.amountLabel.Refresh()
 	}
 	p.updatePayButton()
@@ -291,7 +291,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	}
 
 	// LITRES display - value and unit on same line
-	p.litresLabel = createDigitalText("0.00", displayGreen, 110)
+	p.litresLabel = createDigitalText("000.00", displayGreen, 110)
 
 	litresUnit := canvas.NewText("L", displayGreen)
 	litresUnit.TextSize = 110
@@ -304,7 +304,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	currencySymbol.Alignment = fyne.TextAlignCenter
 	currencySymbol.TextStyle = fyne.TextStyle{Bold: true}
 
-	p.amountLabel = createDigitalText("0.00", displayGreen, 110)
+	p.amountLabel = createDigitalText("000.00", displayGreen, 110)
 
 	// Price per litre indicator - optimized for 1024x600
 	priceInfo := canvas.NewText(fmt.Sprintf("Rate: $%.2f per litre", pricePerLitre), displayWhite)
