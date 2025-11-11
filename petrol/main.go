@@ -22,13 +22,15 @@ const (
 
 	// Pump settings
 	pricePerLitre  = 1.50                   // Currency per litre
-	incrementRate  = 0.1                    // Litres added per increment
-	updateInterval = 100 * time.Millisecond // How often to check button and update display
+	incrementRate  = 0.01                    // Litres added per increment
+	updateInterval = 10 * time.Millisecond // How often to check button and update display
 )
 
 var (
-	debugMode  = false
-	keyPressed = false
+	debugMode         = false
+	keyPressed        = false
+	lastKeyPressTime  = time.Time{}
+	keyPressTimeout   = 150 * time.Millisecond // If no key press in this time, assume key is released
 
 	// Colors for petrol pump display
 	displayBg    = color.RGBA{R: 20, G: 20, B: 20, A: 255}
@@ -225,6 +227,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 			// Only allow SPACE to pump in debug mode
 			if debugMode {
 				keyPressed = true
+				lastKeyPressTime = time.Now()
 			}
 		case fyne.KeyR:
 			// Reset works in both modes
@@ -310,6 +313,10 @@ func runGraphicalMode(button rpio.Pin) {
 
 			if debugMode {
 				// Debug mode: use keyboard (handled by Fyne event handlers)
+				// Check if key press has timed out (key was released)
+				if keyPressed && time.Since(lastKeyPressTime) > keyPressTimeout {
+					keyPressed = false
+				}
 				buttonPressed = keyPressed
 			} else {
 				// Normal mode: use GPIO
