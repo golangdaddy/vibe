@@ -54,13 +54,13 @@ type PetrolPump struct {
 	isPumping   bool
 }
 
-// PayButton is a custom button widget for the touchscreen
+// PayButton is a custom Bootstrap-style button widget for the touchscreen
 type PayButton struct {
-	*canvas.Rectangle
-	text     *canvas.Text
-	enabled  bool
-	onTapped func()
-	rect     fyne.CanvasObject
+	background *canvas.Rectangle
+	shadow     *canvas.Rectangle
+	text       *canvas.Text
+	enabled    bool
+	onTapped   func()
 }
 
 func NewPetrolPump() *PetrolPump {
@@ -109,16 +109,17 @@ func (p *PetrolPump) updatePayButton() {
 	}
 }
 
-// NewPayButton creates a new touchscreen-friendly pay button
+// NewPayButton creates a new Bootstrap-style touchscreen-friendly pay button
 func NewPayButton(text string, onTapped func()) *PayButton {
 	pb := &PayButton{
-		Rectangle: canvas.NewRectangle(displayGreen),
-		text:      canvas.NewText(text, color.White),
-		enabled:   false,
-		onTapped:  onTapped,
+		background: canvas.NewRectangle(displayGreen),
+		shadow:     canvas.NewRectangle(color.RGBA{R: 0, G: 0, B: 0, A: 80}),
+		text:       canvas.NewText(text, color.White),
+		enabled:    false,
+		onTapped:   onTapped,
 	}
 
-	pb.text.TextSize = 38
+	pb.text.TextSize = 42
 	pb.text.Alignment = fyne.TextAlignCenter
 	pb.text.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -131,20 +132,37 @@ func NewPayButton(text string, onTapped func()) *PayButton {
 func (pb *PayButton) SetEnabled(enabled bool) {
 	pb.enabled = enabled
 	if enabled {
-		pb.FillColor = displayGreen
+		// Enabled state - bright green like Bootstrap success button
+		pb.background.FillColor = color.RGBA{R: 40, G: 200, B: 80, A: 255}
 		pb.text.Color = color.White
+		pb.shadow.FillColor = color.RGBA{R: 0, G: 0, B: 0, A: 80}
 	} else {
-		// Disabled state - gray
-		pb.FillColor = color.RGBA{R: 80, G: 80, B: 80, A: 255}
-		pb.text.Color = color.RGBA{R: 150, G: 150, B: 150, A: 255}
+		// Disabled state - gray like Bootstrap disabled
+		pb.background.FillColor = color.RGBA{R: 108, G: 117, B: 125, A: 255}
+		pb.text.Color = color.RGBA{R: 200, G: 200, B: 200, A: 255}
+		pb.shadow.FillColor = color.RGBA{R: 0, G: 0, B: 0, A: 30}
 	}
-	pb.Refresh()
+	pb.background.Refresh()
 	pb.text.Refresh()
+	pb.shadow.Refresh()
 }
 
 func (pb *PayButton) Tapped(pe *fyne.PointEvent) {
 	if pb.enabled && pb.onTapped != nil {
+		// Visual feedback - darken button briefly
+		originalColor := pb.background.FillColor
+		pb.background.FillColor = color.RGBA{R: 30, G: 160, B: 60, A: 255}
+		pb.background.Refresh()
+
+		// Execute callback
 		pb.onTapped()
+
+		// Restore color after a brief moment
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			pb.background.FillColor = originalColor
+			pb.background.Refresh()
+		}()
 	}
 }
 
@@ -154,27 +172,71 @@ func (pb *PayButton) CreateRenderer() fyne.WidgetRenderer {
 	return &payButtonRenderer{button: pb}
 }
 
+// Implement fyne.Widget interface methods
+func (pb *PayButton) Size() fyne.Size {
+	return fyne.NewSize(400, 75)
+}
+
+func (pb *PayButton) Resize(size fyne.Size) {}
+
+func (pb *PayButton) Position() fyne.Position {
+	return fyne.NewPos(0, 0)
+}
+
+func (pb *PayButton) Move(pos fyne.Position) {}
+
+func (pb *PayButton) MinSize() fyne.Size {
+	return fyne.NewSize(400, 75)
+}
+
+func (pb *PayButton) Visible() bool {
+	return true
+}
+
+func (pb *PayButton) Show() {}
+
+func (pb *PayButton) Hide() {}
+
+func (pb *PayButton) Refresh() {
+	pb.background.Refresh()
+	pb.text.Refresh()
+	pb.shadow.Refresh()
+}
+
 type payButtonRenderer struct {
 	button *PayButton
 }
 
 func (r *payButtonRenderer) Layout(size fyne.Size) {
-	r.button.Rectangle.Resize(size)
+	// Shadow offset (bottom-right for depth effect)
+	shadowOffset := float32(4)
+
+	// Position shadow slightly offset
+	r.button.shadow.Move(fyne.NewPos(shadowOffset, shadowOffset))
+	r.button.shadow.Resize(fyne.NewSize(size.Width, size.Height))
+
+	// Position main button
+	r.button.background.Move(fyne.NewPos(0, 0))
+	r.button.background.Resize(size)
+
+	// Center text
+	r.button.text.Move(fyne.NewPos(0, 0))
 	r.button.text.Resize(size)
 }
 
 func (r *payButtonRenderer) MinSize() fyne.Size {
-	// Optimized for 1024x600 touchscreen - large enough for easy tapping
-	return fyne.NewSize(350, 70)
+	// Bootstrap-like button size - larger for touchscreen
+	return fyne.NewSize(400, 75)
 }
 
 func (r *payButtonRenderer) Refresh() {
-	r.button.Rectangle.Refresh()
+	r.button.background.Refresh()
 	r.button.text.Refresh()
+	r.button.shadow.Refresh()
 }
 
 func (r *payButtonRenderer) Objects() []fyne.CanvasObject {
-	return []fyne.CanvasObject{r.button.Rectangle, r.button.text}
+	return []fyne.CanvasObject{r.button.shadow, r.button.background, r.button.text}
 }
 
 func (r *payButtonRenderer) Destroy() {}
@@ -201,35 +263,25 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 		modeIndicator.TextStyle = fyne.TextStyle{Bold: true}
 	}
 
-	// LITRES section - optimized for 1024x600
-	litresHeader := canvas.NewText("LITRES", displayAmber)
-	litresHeader.TextSize = 32
-	litresHeader.Alignment = fyne.TextAlignCenter
-	litresHeader.TextStyle = fyne.TextStyle{Bold: true}
-
+	// LITRES display - value and unit on same line
 	p.litresLabel = canvas.NewText("0.00", displayGreen)
-	p.litresLabel.TextSize = 100
+	p.litresLabel.TextSize = 110
 	p.litresLabel.Alignment = fyne.TextAlignCenter
 	p.litresLabel.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 
-	litresUnit := canvas.NewText("L", displayWhite)
-	litresUnit.TextSize = 36
+	litresUnit := canvas.NewText("L", displayGreen)
+	litresUnit.TextSize = 110
 	litresUnit.Alignment = fyne.TextAlignCenter
 	litresUnit.TextStyle = fyne.TextStyle{Bold: true}
 
-	// AMOUNT section - optimized for 1024x600
-	amountHeader := canvas.NewText("AMOUNT", displayAmber)
-	amountHeader.TextSize = 32
-	amountHeader.Alignment = fyne.TextAlignCenter
-	amountHeader.TextStyle = fyne.TextStyle{Bold: true}
-
+	// AMOUNT display - currency and value on same line
 	currencySymbol := canvas.NewText("$", displayGreen)
-	currencySymbol.TextSize = 65
+	currencySymbol.TextSize = 110
 	currencySymbol.Alignment = fyne.TextAlignCenter
 	currencySymbol.TextStyle = fyne.TextStyle{Bold: true}
 
 	p.amountLabel = canvas.NewText("0.00", displayGreen)
-	p.amountLabel.TextSize = 100
+	p.amountLabel.TextSize = 110
 	p.amountLabel.Alignment = fyne.TextAlignCenter
 	p.amountLabel.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 
@@ -243,42 +295,35 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 		p.reset()
 	})
 
-	// Status text - optimized for 1024x600
-	var statusText string
-	if debugMode {
-		statusText = "Hold SPACE to pump • Press R to reset • ESC to exit"
-	} else {
-		statusText = "Press and hold button to pump • Tap PAY to reset"
-	}
-	statusLabel := canvas.NewText(statusText, displayWhite)
-	statusLabel.TextSize = 18
-	statusLabel.Alignment = fyne.TextAlignCenter
-
-	// Decorative separator lines - optimized for 1024x600
+	// Decorative separator line - optimized for 1024x600
 	line1 := canvas.NewRectangle(displayGreen)
-	line1.SetMinSize(fyne.NewSize(600, 4))
-	line2 := canvas.NewRectangle(displayGreen)
-	line2.SetMinSize(fyne.NewSize(600, 4))
-	line3 := canvas.NewRectangle(displayGreen)
-	line3.SetMinSize(fyne.NewSize(600, 4))
+	line1.SetMinSize(fyne.NewSize(700, 5))
 
 	// Build layout
 	var content *fyne.Container
 	if debugMode {
+		// Debug mode: show control instructions
+		statusLabel := canvas.NewText("Hold SPACE to pump • Press R to reset • ESC to exit", displayWhite)
+		statusLabel.TextSize = 18
+		statusLabel.Alignment = fyne.TextAlignCenter
+		
 		content = container.New(layout.NewVBoxLayout(),
 			layout.NewSpacer(),
 			container.NewCenter(title),
 			container.NewCenter(modeIndicator),
 			layout.NewSpacer(),
+			layout.NewSpacer(),
+			// Litres with unit on same line
+			container.NewCenter(
+				container.NewHBox(
+					p.litresLabel,
+					litresUnit,
+				),
+			),
+			layout.NewSpacer(),
 			container.NewCenter(line1),
 			layout.NewSpacer(),
-			container.NewCenter(litresHeader),
-			container.NewCenter(p.litresLabel),
-			container.NewCenter(litresUnit),
-			layout.NewSpacer(),
-			container.NewCenter(line2),
-			layout.NewSpacer(),
-			container.NewCenter(amountHeader),
+			// Amount with currency on same line
 			container.NewCenter(
 				container.NewHBox(
 					currencySymbol,
@@ -286,7 +331,6 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 				),
 			),
 			layout.NewSpacer(),
-			container.NewCenter(line3),
 			layout.NewSpacer(),
 			container.NewCenter(priceInfo),
 			layout.NewSpacer(),
@@ -296,19 +340,23 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 			layout.NewSpacer(),
 		)
 	} else {
+		// Normal mode: clean display without instructions
 		content = container.New(layout.NewVBoxLayout(),
 			layout.NewSpacer(),
 			container.NewCenter(title),
 			layout.NewSpacer(),
+			layout.NewSpacer(),
+			// Litres with unit on same line
+			container.NewCenter(
+				container.NewHBox(
+					p.litresLabel,
+					litresUnit,
+				),
+			),
+			layout.NewSpacer(),
 			container.NewCenter(line1),
 			layout.NewSpacer(),
-			container.NewCenter(litresHeader),
-			container.NewCenter(p.litresLabel),
-			container.NewCenter(litresUnit),
-			layout.NewSpacer(),
-			container.NewCenter(line2),
-			layout.NewSpacer(),
-			container.NewCenter(amountHeader),
+			// Amount with currency on same line
 			container.NewCenter(
 				container.NewHBox(
 					currencySymbol,
@@ -316,13 +364,10 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 				),
 			),
 			layout.NewSpacer(),
-			container.NewCenter(line3),
 			layout.NewSpacer(),
 			container.NewCenter(priceInfo),
 			layout.NewSpacer(),
 			container.NewCenter(p.payButton),
-			layout.NewSpacer(),
-			container.NewCenter(statusLabel),
 			layout.NewSpacer(),
 		)
 	}

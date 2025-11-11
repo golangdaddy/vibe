@@ -11,8 +11,9 @@ A Go program for Raspberry Pi that creates a realistic petrol pump display with 
 - 📊 Large digital-style numbers for litres and amount
 - 🎨 Authentic petrol pump styling (green LCD text on dark background)
 - 🔘 Button-controlled pumping (press and hold to increment)
-- 💳 **Touchscreen Pay Button** - large, accessible button to complete transaction and reset
+- 💳 **Bootstrap-Style Pay Button** - modern button with shadow, visual feedback on tap
 - 🔒 Smart button state - Pay button disables during pumping, enables when stopped
+- 👆 Tactile feedback - Button darkens when tapped for immediate visual response
 - 💰 Configurable price per litre
 - 🔄 Smooth real-time updates (10 times per second)
 - 🔧 **Automatic mode detection** - no configuration needed!
@@ -195,6 +196,10 @@ The program will:
 - **Enables** (bright green) when pumping stops and there's an amount to pay
 - Tap to reset litres and amount to zero
 
+**Display:**
+- Normal mode shows a clean interface without control instructions
+- Debug mode includes keyboard control hints at the bottom
+
 ### On Your Laptop (Terminal Debug Mode)
 
 Just run normally (no sudo needed):
@@ -215,7 +220,9 @@ The program will:
 - **Press ESC**: Exit the program
 - **Ctrl+C**: Exit from terminal
 
-**Pay Button:** The green PAY button appears on screen and works with mouse clicks (simulating touchscreen taps in debug mode)
+**Display:**
+- Debug mode shows control instructions: "Hold SPACE to pump • Press R to reset • ESC to exit"
+- The green PAY button appears on screen and works with mouse clicks (simulating touchscreen taps)
 
 ## Adding Your Logo
 
@@ -370,10 +377,13 @@ No code changes needed - it automatically detects the environment!
 
 ### Display Specifications (Graphical Mode)
 - **Optimized for:** 1024x600 touchscreen displays
-- **Font sizes:** 100pt for main numbers, 48pt for title, 32pt for headers
-- **Pay button:** 350x70 pixels with 38pt text - perfect for touchscreen tapping
+- **Font sizes:** 110pt for main numbers with units, 48pt for title
+- **Layout:** Clean design - values and units on same line, no subheadings
+- **Pay button:** 400x75 pixels Bootstrap-style with shadow effect and 42pt text
+  - Green (#28C850) when enabled, Gray (#6C757D) when disabled
+  - Darkens when tapped for visual feedback
+  - 4px shadow offset for depth
 - **Color scheme:** Dark background (#141414) with bright green (#00FF64) digits
-- **Layout:** Fullscreen centered with vertical organization
 - **Update rate:** 10 times per second (10ms refresh)
 - **Resolution:** Works on any resolution, optimized for 1024x600
 
