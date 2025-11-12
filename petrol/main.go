@@ -388,9 +388,10 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	// Stack footer background and content with additional internal padding
 	footer := container.NewStack(footerBg, container.NewPadded(footerContent))
 
-	// Decorative separator line - optimized for 1024x600
-	line1 := canvas.NewRectangle(displayWhite)
-	line1.SetMinSize(fyne.NewSize(720, 5))
+	// Decorative separator line - full width, thick, darker
+	lineDarkerGray := color.RGBA{R: 120, G: 120, B: 120, A: 255} // 50% darker than displayWhite
+	line1 := canvas.NewRectangle(lineDarkerGray)
+	line1.SetMinSize(fyne.NewSize(1024, 15))
 
 	// Fixed horizontal spacer for "this sale" layout
 	horizontalSpacer := canvas.NewRectangle(color.Transparent)
