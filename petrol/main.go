@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 	"github.com/stianeikeland/go-rpio/v4"
 )
 
@@ -90,6 +91,8 @@ type PetrolPump struct {
 	amountLabel *canvas.Text
 	payButton   *PayButton
 	isPumping   bool
+	window      fyne.Window
+	mainContent *fyne.Container
 }
 
 // PayButton is a custom Bootstrap-style button widget for the touchscreen
@@ -145,6 +148,70 @@ func (p *PetrolPump) updatePayButton() {
 		shouldEnable := !p.isPumping && p.amount > 0
 		p.payButton.SetEnabled(shouldEnable)
 	}
+}
+
+func (p *PetrolPump) showPaymentScreen() {
+	// Create payment screen background
+	bg := canvas.NewRectangle(displayBg)
+
+	// Header with white background (same style as main screen)
+	headerBg := canvas.NewRectangle(color.White)
+	petrolLabel := canvas.NewText("PETROL", color.Black)
+	petrolLabel.TextSize = 50
+	petrolLabel.Alignment = fyne.TextAlignCenter
+
+	headerContent := container.NewCenter(petrolLabel)
+	header := container.NewStack(headerBg, container.NewPadded(headerContent))
+
+	// Payment instruction text
+	paymentText := canvas.NewText("Tap the contactless", displayWhite)
+	paymentText.TextSize = 60
+	paymentText.Alignment = fyne.TextAlignCenter
+	paymentText.TextStyle = fyne.TextStyle{Bold: false}
+
+	rfidText := canvas.NewText("RFID reader to pay", displayWhite)
+	rfidText.TextSize = 60
+	rfidText.Alignment = fyne.TextAlignCenter
+	rfidText.TextStyle = fyne.TextStyle{Bold: false}
+
+	// Amount to pay
+	amountText := canvas.NewText(fmt.Sprintf("£%.2f", p.amount), displayWhite)
+	amountText.TextSize = 100
+	amountText.Alignment = fyne.TextAlignCenter
+	amountText.TextStyle = fyne.TextStyle{Bold: true}
+
+	// Cancel button
+	cancelButton := widget.NewButton("Cancel", func() {
+		// Go back to main screen
+		mainBg := canvas.NewRectangle(displayBg)
+		p.window.SetContent(container.NewStack(mainBg, p.mainContent))
+		// Reset the pump after a short delay to allow transition
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			p.reset()
+		}()
+	})
+	cancelButton.Importance = widget.HighImportance
+
+	// Layout
+	content := container.NewBorder(
+		header, // Top
+		container.NewPadded(container.NewCenter(cancelButton)), // Bottom
+		nil, // Left
+		nil, // Right
+		// Center
+		container.NewVBox(
+			layout.NewSpacer(),
+			container.NewCenter(paymentText),
+			container.NewCenter(rfidText),
+			layout.NewSpacer(),
+			container.NewCenter(amountText),
+			layout.NewSpacer(),
+			layout.NewSpacer(),
+		),
+	)
+
+	p.window.SetContent(container.NewStack(bg, content))
 }
 
 // NewPayButton creates a new Bootstrap-style touchscreen-friendly pay button
@@ -357,7 +424,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 
 	// Pay button (touchscreen) - optimized for 1024x600
 	p.payButton = NewPayButton("PAY", func() {
-		p.reset()
+		p.showPaymentScreen()
 	})
 
 	// Load logo for footer
@@ -482,6 +549,8 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	}
 
 	// Stack background and content
+	p.mainContent = content
+	p.window = w
 	w.SetContent(container.NewStack(bg, content))
 
 	// Handle keyboard - ESC and R work in both modes, SPACE only in debug mode
