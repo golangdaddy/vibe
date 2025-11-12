@@ -47,10 +47,11 @@ var (
 	keyPressTimeout  = 150 * time.Millisecond // If no key press in this time, assume key is released
 
 	// Colors for petrol pump display
-	displayBg    = color.RGBA{R: 20, G: 20, B: 20, A: 255}
-	displayAmber = color.RGBA{R: 255, G: 200, B: 0, A: 255}
-	displayWhite = color.RGBA{R: 240, G: 240, B: 240, A: 255}
-	displayRed   = color.RGBA{R: 255, G: 50, B: 50, A: 255}
+	displayBg       = color.RGBA{R: 20, G: 20, B: 20, A: 255}
+	displayAmber    = color.RGBA{R: 255, G: 200, B: 0, A: 255}
+	displayWhite    = color.RGBA{R: 240, G: 240, B: 240, A: 255}
+	displayRed      = color.RGBA{R: 255, G: 50, B: 50, A: 255}
+	displayDarkGrey = color.RGBA{R: 40, G: 40, B: 40, A: 255} // For leading zeros
 
 	// Font resources
 	digitalFontResource fyne.Resource // DSEG7 for numbers
@@ -84,15 +85,17 @@ func (ct *customTheme) Font(style fyne.TextStyle) fyne.Resource {
 }
 
 type PetrolPump struct {
-	litres      float64
-	amount      float64
-	button      rpio.Pin
-	litresLabel *canvas.Text
-	amountLabel *canvas.Text
-	payButton   *PayButton
-	isPumping   bool
-	window      fyne.Window
-	mainContent *fyne.Container
+	litres           float64
+	amount           float64
+	button           rpio.Pin
+	litresContainer  *fyne.Container
+	amountContainer  *fyne.Container
+	litresDigitTexts []*canvas.Text
+	amountDigitTexts []*canvas.Text
+	payButton        *PayButton
+	isPumping        bool
+	window           fyne.Window
+	mainContent      *fyne.Container
 }
 
 // PayButton is a custom Bootstrap-style button widget for the touchscreen
@@ -131,13 +134,14 @@ func (p *PetrolPump) stopPumping() {
 }
 
 func (p *PetrolPump) updateGUIDisplay() {
-	if p.litresLabel != nil {
-		p.litresLabel.Text = fmt.Sprintf("%06.2f", p.litres)
-		p.litresLabel.Refresh()
+	// Update multi-color digit displays
+	if p.litresDigitTexts != nil {
+		litresText := fmt.Sprintf("%06.2f", p.litres)
+		updateMultiColorDigitDisplay(litresText, displayWhite, 120, p.litresDigitTexts)
 	}
-	if p.amountLabel != nil {
-		p.amountLabel.Text = fmt.Sprintf("%06.2f", p.amount)
-		p.amountLabel.Refresh()
+	if p.amountDigitTexts != nil {
+		amountText := fmt.Sprintf("%06.2f", p.amount)
+		updateMultiColorDigitDisplay(amountText, displayWhite, 120, p.amountDigitTexts)
 	}
 	p.updatePayButton()
 }
@@ -397,8 +401,8 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	// Stack header background and content with padding
 	header := container.NewStack(headerBg, container.NewPadded(headerContent))
 
-	// LITRES display - value and unit on same line
-	p.litresLabel = createDigitalText("000.00", displayWhite, 120)
+	// LITRES display - value and unit on same line (with multi-color support)
+	p.litresContainer, p.litresDigitTexts = createMultiColorDigitDisplay("000.00", displayWhite, 120)
 
 	thisSaleTextSize := float32(60)
 
@@ -420,7 +424,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	// AMOUNT display - currency and value on same line (using basic system font)
 	currencySymbol := createBasicText("£", displayWhite, 96)
 
-	p.amountLabel = createDigitalText("000.00", displayWhite, 120)
+	p.amountContainer, p.amountDigitTexts = createMultiColorDigitDisplay("000.00", displayWhite, 120)
 
 	// Pay button (touchscreen) - optimized for 1024x600
 	p.payButton = NewPayButton("PAY", func() {
@@ -483,7 +487,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 				// Litres with unit on same line
 				container.NewCenter(
 					container.NewHBox(
-						p.litresLabel,
+						p.litresContainer,
 						litresCurrencyUnit,
 					),
 				),
@@ -501,7 +505,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 						),
 						horizontalSpacer,
 						currencySymbol,
-						p.amountLabel,
+						p.amountContainer,
 					),
 				),
 				layout.NewSpacer(),
@@ -522,7 +526,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 				// Litres with unit on same line
 				container.NewCenter(
 					container.NewHBox(
-						p.litresLabel,
+						p.litresContainer,
 						litresCurrencyUnit,
 					),
 				),
@@ -540,7 +544,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 						),
 						horizontalSpacer,
 						currencySymbol,
-						p.amountLabel,
+						p.amountContainer,
 					),
 				),
 				layout.NewSpacer(),
@@ -620,6 +624,170 @@ func createSplashScreen(a fyne.App) fyne.Window {
 
 	w.SetContent(container.NewStack(bg, content))
 	return w
+}
+
+// createMultiColorDigitDisplay creates a container with individual digit texts
+// that can have different colors (for leading zeros in dark grey)
+// Leading zeros are displayed as eights, but the first integer zero stays as 0
+func createMultiColorDigitDisplay(text string, mainColor color.Color, size float32) (*fyne.Container, []*canvas.Text) {
+	// Find the decimal point position
+	decimalIdx := -1
+	for i, ch := range text {
+		if ch == '.' {
+			decimalIdx = i
+			break
+		}
+	}
+
+	// Find the first non-zero digit (excluding decimal point)
+	firstNonZeroIdx := -1
+	for i, ch := range text {
+		if ch != '0' && ch != '.' {
+			firstNonZeroIdx = i
+			break
+		}
+	}
+
+	// Build display text - convert leading zeros to '8', but keep first integer zero as '0'
+	displayText := ""
+	for i, ch := range text {
+		if ch == '0' {
+			// Check if this is the first integer zero (position just before decimal)
+			if decimalIdx != -1 && i == decimalIdx-1 {
+				// This is the first integer position - keep as '0'
+				displayText += "0"
+			} else if decimalIdx != -1 && i < decimalIdx-1 {
+				// It's a leading zero before the first integer - convert to '8'
+				displayText += "8"
+			} else {
+				// After decimal point - keep as '0'
+				displayText += "0"
+			}
+		} else {
+			displayText += string(ch)
+		}
+	}
+
+	// Create individual text widgets for each character
+	var digitTexts []*canvas.Text
+	var objects []fyne.CanvasObject
+
+	for i, ch := range displayText {
+		// Determine if this is a leading zero that should be dark grey
+		isLeadingZero := false
+		if i < len(text) && text[i] == '0' {
+			// It's a zero
+			if decimalIdx != -1 && i < decimalIdx-1 {
+				// It's before the first integer digit (the one just before decimal)
+				// Check if it's a leading zero (before first non-zero digit)
+				if firstNonZeroIdx == -1 || i < firstNonZeroIdx {
+					isLeadingZero = true
+				}
+			}
+		}
+
+		// Choose color
+		col := mainColor
+		if isLeadingZero {
+			col = displayDarkGrey
+		}
+
+		// Create text widget
+		txt := canvas.NewText(string(ch), col)
+
+		// Special handling for decimal point to make it more visible
+		if ch == '.' {
+			// Make decimal point slightly larger and use non-monospace
+			txt.TextSize = size * 1.2
+			txt.TextStyle = fyne.TextStyle{Bold: true, Monospace: false}
+			txt.Alignment = fyne.TextAlignCenter
+		} else {
+			txt.TextSize = size
+			txt.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+		}
+
+		digitTexts = append(digitTexts, txt)
+		objects = append(objects, txt)
+	}
+
+	// Return horizontal box container with all digits
+	return container.NewHBox(objects...), digitTexts
+}
+
+// updateMultiColorDigitDisplay updates an existing multi-color digit display
+func updateMultiColorDigitDisplay(text string, mainColor color.Color, size float32, digitTexts []*canvas.Text) {
+	// Find the decimal point position
+	decimalIdx := -1
+	for i, ch := range text {
+		if ch == '.' {
+			decimalIdx = i
+			break
+		}
+	}
+
+	// Find the first non-zero digit (excluding decimal point)
+	firstNonZeroIdx := -1
+	for i, ch := range text {
+		if ch != '0' && ch != '.' {
+			firstNonZeroIdx = i
+			break
+		}
+	}
+
+	// Build display text - convert leading zeros to '8', but keep first integer zero as '0'
+	displayText := ""
+	for i, ch := range text {
+		if ch == '0' {
+			// Check if this is the first integer zero (position just before decimal)
+			if decimalIdx != -1 && i == decimalIdx-1 {
+				// This is the first integer position - keep as '0'
+				displayText += "0"
+			} else if decimalIdx != -1 && i < decimalIdx-1 {
+				// It's a leading zero before the first integer - convert to '8'
+				displayText += "8"
+			} else {
+				// After decimal point - keep as '0'
+				displayText += "0"
+			}
+		} else {
+			displayText += string(ch)
+		}
+	}
+
+	// Update each digit text
+	for i := 0; i < len(digitTexts) && i < len(displayText); i++ {
+		// Determine if this is a leading zero that should be dark grey
+		isLeadingZero := false
+		if i < len(text) && text[i] == '0' {
+			// It's a zero
+			if decimalIdx != -1 && i < decimalIdx-1 {
+				// It's before the first integer digit (the one just before decimal)
+				// Check if it's a leading zero (before first non-zero digit)
+				if firstNonZeroIdx == -1 || i < firstNonZeroIdx {
+					isLeadingZero = true
+				}
+			}
+		}
+
+		// Choose color
+		col := mainColor
+		if isLeadingZero {
+			col = displayDarkGrey
+		}
+
+		// Update text and color
+		digitTexts[i].Text = string(displayText[i])
+		digitTexts[i].Color = col
+
+		// Special handling for decimal point to make it more visible
+		if displayText[i] == '.' {
+			digitTexts[i].TextSize = size * 1.2
+		} else {
+			digitTexts[i].TextSize = size
+		}
+
+		digitTexts[i].Refresh()
+	}
 }
 
 // createDigitalText creates a text widget with digital font if available
