@@ -23,7 +23,7 @@ const (
 
 	// Pump settings
 	pricePerLitre  = 1.50                 // Currency per litre
-	incrementRate  = 0.01                 // Litres added per increment
+	incrementRate  = 0.0025               // Litres added per increment
 	updateInterval = 5 * time.Millisecond // How often to check button and update display
 
 	// Splash screen settings
