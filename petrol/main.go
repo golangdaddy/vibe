@@ -331,9 +331,9 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	header := container.NewStack(headerBg, container.NewPadded(headerContent))
 
 	// LITRES display - value and unit on same line
-	p.litresLabel = createDigitalText("000.00", displayWhite, 80)
+	p.litresLabel = createDigitalText("000.00", displayWhite, 100)
 
-	thisSaleTextSize := float32(40)
+	thisSaleTextSize := float32(50)
 
 	thisSale := canvas.NewText("this", displayWhite)
 	thisSale.TextSize = thisSaleTextSize
@@ -346,14 +346,14 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	saleThis.TextStyle = fyne.TextStyle{Bold: false}
 
 	litresCurrencyUnit := canvas.NewText(" litres", displayWhite)
-	litresCurrencyUnit.TextSize = 50
+	litresCurrencyUnit.TextSize = 65
 	litresCurrencyUnit.Alignment = fyne.TextAlignCenter
 	litresCurrencyUnit.TextStyle = fyne.TextStyle{Bold: true}
 
 	// AMOUNT display - currency and value on same line (using basic system font)
-	currencySymbol := createBasicText("£", displayWhite, 60)
+	currencySymbol := createBasicText("£", displayWhite, 80)
 
-	p.amountLabel = createDigitalText("000.00", displayWhite, 80)
+	p.amountLabel = createDigitalText("000.00", displayWhite, 100)
 
 	// Pay button (touchscreen) - optimized for 1024x600
 	p.payButton = NewPayButton("PAY", func() {
@@ -390,11 +390,11 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 
 	// Decorative separator line - optimized for 1024x600
 	line1 := canvas.NewRectangle(displayWhite)
-	line1.SetMinSize(fyne.NewSize(500, 3))
+	line1.SetMinSize(fyne.NewSize(600, 4))
 
 	// Fixed horizontal spacer for "this sale" layout
 	horizontalSpacer := canvas.NewRectangle(color.Transparent)
-	horizontalSpacer.SetMinSize(fyne.NewSize(20, 1))
+	horizontalSpacer.SetMinSize(fyne.NewSize(30, 1))
 
 	// Build layout
 	var content *fyne.Container
@@ -412,7 +412,6 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 			// Center content
 			container.New(layout.NewVBoxLayout(),
 				layout.NewSpacer(),
-				layout.NewSpacer(),
 				// Litres with unit on same line
 				container.NewCenter(
 					container.NewHBox(
@@ -422,8 +421,6 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 				),
 				layout.NewSpacer(),
 				container.NewCenter(line1),
-
-				// Rate (price per litre) - above amount
 				layout.NewSpacer(),
 				// Amount with currency on same line
 				container.NewCenter(
@@ -439,7 +436,6 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 						p.amountLabel,
 					),
 				),
-				layout.NewSpacer(),
 				layout.NewSpacer(),
 				container.NewCenter(statusLabel),
 				layout.NewSpacer(),
@@ -455,7 +451,6 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 			// Center content
 			container.New(layout.NewVBoxLayout(),
 				layout.NewSpacer(),
-				layout.NewSpacer(),
 				// Litres with unit on same line
 				container.NewCenter(
 					container.NewHBox(
@@ -465,8 +460,6 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 				),
 				layout.NewSpacer(),
 				container.NewCenter(line1),
-
-				// Rate (price per litre) - above amount
 				layout.NewSpacer(),
 				// Amount with currency on same line
 				container.NewCenter(
@@ -482,7 +475,6 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 						p.amountLabel,
 					),
 				),
-				layout.NewSpacer(),
 				layout.NewSpacer(),
 			),
 		)
