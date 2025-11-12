@@ -157,7 +157,7 @@ func NewPayButton(text string, onTapped func()) *PayButton {
 		onTapped:   onTapped,
 	}
 
-	pb.text.TextSize = 48
+	pb.text.TextSize = 36
 	pb.text.Alignment = fyne.TextAlignCenter
 	pb.text.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -224,7 +224,7 @@ func (pb *PayButton) Position() fyne.Position {
 func (pb *PayButton) Move(pos fyne.Position) {}
 
 func (pb *PayButton) MinSize() fyne.Size {
-	return fyne.NewSize(480, 90)
+	return fyne.NewSize(360, 70)
 }
 
 func (pb *PayButton) Visible() bool {
@@ -286,24 +286,54 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	// Create background
 	bg := canvas.NewRectangle(displayBg)
 
+	// Header labels (black text for white header background)
+	petrolLabel := canvas.NewText("PETROL", color.Black)
+	petrolLabel.TextSize = 50
+	petrolLabel.Alignment = fyne.TextAlignCenter
+	petrolLabel.TextStyle = fyne.TextStyle{Bold: false}
+
+	// Rate label for header (black text)
+	rateLabel := canvas.NewText(fmt.Sprintf("£%.2f/L", pricePerLitre), color.Black)
+	rateLabel.TextSize = 30
+	rateLabel.Alignment = fyne.TextAlignCenter
+	rateLabel.TextStyle = fyne.TextStyle{Bold: false}
+
 	// Debug mode indicator (if in debug mode)
 	var modeIndicator *canvas.Text
 	if debugMode {
-		modeIndicator = canvas.NewText("🔧 DEBUG MODE 🔧", displayRed)
-		modeIndicator.TextSize = 22
+		modeIndicator = canvas.NewText("🔧 DEBUG MODE 🔧", color.Black)
+		modeIndicator.TextSize = 18
 		modeIndicator.Alignment = fyne.TextAlignCenter
 		modeIndicator.TextStyle = fyne.TextStyle{Bold: true}
 	}
 
+	// Create header with white background
+	headerBg := canvas.NewRectangle(color.White)
+	var headerContent fyne.CanvasObject
+	if debugMode {
+		// Header with PETROL (left), DEBUG MODE (center), rate (right)
+		headerContent = container.NewBorder(
+			nil, nil,
+			petrolLabel,                        // Left
+			rateLabel,                          // Right
+			container.NewCenter(modeIndicator), // Center
+		)
+	} else {
+		// Header with PETROL (left), rate (right)
+		headerContent = container.NewBorder(
+			nil, nil,
+			petrolLabel, // Left
+			rateLabel,   // Right
+			nil,         // Center (empty)
+		)
+	}
+	// Stack header background and content with padding
+	header := container.NewStack(headerBg, container.NewPadded(headerContent))
+
 	// LITRES display - value and unit on same line
-	p.litresLabel = createDigitalText("000.00", displayWhite, 110)
+	p.litresLabel = createDigitalText("000.00", displayWhite, 80)
 
-	thisSaleTextSize := float32(60)
-
-	petrolLabel := canvas.NewText("PETROL", displayWhite)
-	petrolLabel.TextSize = 80
-	petrolLabel.Alignment = fyne.TextAlignCenter
-	petrolLabel.TextStyle = fyne.TextStyle{Bold: false}
+	thisSaleTextSize := float32(40)
 
 	thisSale := canvas.NewText("this", displayWhite)
 	thisSale.TextSize = thisSaleTextSize
@@ -315,23 +345,15 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	saleThis.Alignment = fyne.TextAlignCenter
 	saleThis.TextStyle = fyne.TextStyle{Bold: false}
 
-	litresCurrencyUnit := canvas.NewText(" litres   £", displayWhite)
-	litresCurrencyUnit.TextSize = 80
+	litresCurrencyUnit := canvas.NewText(" litres", displayWhite)
+	litresCurrencyUnit.TextSize = 50
 	litresCurrencyUnit.Alignment = fyne.TextAlignCenter
 	litresCurrencyUnit.TextStyle = fyne.TextStyle{Bold: true}
 
-	litresUnit := canvas.NewText("/L", displayWhite)
-	litresUnit.TextSize = 110
-	litresUnit.Alignment = fyne.TextAlignCenter
-	litresUnit.TextStyle = fyne.TextStyle{Bold: true}
-
-	// Price per litre indicator - in digital font, smaller than main numbers
-	priceInfo := createDigitalText(fmt.Sprintf(" %.2f", pricePerLitre), displayWhite, 75)
-
 	// AMOUNT display - currency and value on same line (using basic system font)
-	currencySymbol := createBasicText("£", displayWhite, 100)
+	currencySymbol := createBasicText("£", displayWhite, 60)
 
-	p.amountLabel = createDigitalText("000.00", displayWhite, 110)
+	p.amountLabel = createDigitalText("000.00", displayWhite, 80)
 
 	// Pay button (touchscreen) - optimized for 1024x600
 	p.payButton = NewPayButton("PAY", func() {
@@ -344,7 +366,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 		// Logo file exists
 		img := canvas.NewImageFromFile(logoPath)
 		img.FillMode = canvas.ImageFillContain
-		img.SetMinSize(fyne.NewSize(80, 80))
+		img.SetMinSize(fyne.NewSize(60, 60))
 		// Add padding around logo
 		logoWidget = container.NewPadded(img)
 	} else {
@@ -358,45 +380,37 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	// Footer content: logo left, spacer middle, button right
 	footerContent := container.NewBorder(
 		nil, nil,
-		logoWidget,                       // Left
+		container.NewPadded(logoWidget),  // Left (with padding)
 		container.NewPadded(p.payButton), // Right (with padding)
 		nil,                              // Center (empty)
 	)
 
-	// Stack footer background and content (no padding)
-	footer := container.NewStack(footerBg, footerContent)
+	// Stack footer background and content with additional internal padding
+	footer := container.NewStack(footerBg, container.NewPadded(footerContent))
 
 	// Decorative separator line - optimized for 1024x600
 	line1 := canvas.NewRectangle(displayWhite)
-	line1.SetMinSize(fyne.NewSize(700, 5))
+	line1.SetMinSize(fyne.NewSize(500, 3))
 
 	// Fixed horizontal spacer for "this sale" layout
 	horizontalSpacer := canvas.NewRectangle(color.Transparent)
-	horizontalSpacer.SetMinSize(fyne.NewSize(40, 1))
+	horizontalSpacer.SetMinSize(fyne.NewSize(20, 1))
 
 	// Build layout
 	var content *fyne.Container
 	if debugMode {
 		// Debug mode: show control instructions
 		statusLabel := canvas.NewText("Hold SPACE to pump • Press R to reset • ESC to exit", displayWhite)
-		statusLabel.TextSize = 18
+		statusLabel.TextSize = 14
 		statusLabel.Alignment = fyne.TextAlignCenter
 
 		content = container.NewBorder(
-			nil,    // Top
+			header, // Top - header with PETROL and DEBUG MODE
 			footer, // Bottom - footer with button and logo
 			nil,    // Left
 			nil,    // Right
 			// Center content
 			container.New(layout.NewVBoxLayout(),
-				layout.NewSpacer(),
-				container.NewCenter(
-					container.NewHBox(
-						petrolLabel,
-						layout.NewSpacer(),
-						modeIndicator,
-					),
-				),
 				layout.NewSpacer(),
 				layout.NewSpacer(),
 				// Litres with unit on same line
@@ -404,8 +418,6 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 					container.NewHBox(
 						p.litresLabel,
 						litresCurrencyUnit,
-						container.NewCenter(priceInfo),
-						litresUnit,
 					),
 				),
 				layout.NewSpacer(),
@@ -436,7 +448,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	} else {
 		// Normal mode: clean display without instructions
 		content = container.NewBorder(
-			nil,    // Top
+			header, // Top - header with PETROL
 			footer, // Bottom - footer with button and logo
 			nil,    // Left
 			nil,    // Right
@@ -444,14 +456,11 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 			container.New(layout.NewVBoxLayout(),
 				layout.NewSpacer(),
 				layout.NewSpacer(),
-				layout.NewSpacer(),
 				// Litres with unit on same line
 				container.NewCenter(
 					container.NewHBox(
 						p.litresLabel,
 						litresCurrencyUnit,
-						priceInfo,
-						litresUnit,
 					),
 				),
 				layout.NewSpacer(),
