@@ -22,9 +22,9 @@ const (
 	buttonPin = 17
 
 	// Pump settings
-	pricePerLitre  = 1.50                  // Currency per litre
-	incrementRate  = 0.005                 // Litres added per increment
-	updateInterval = 10 * time.Millisecond // How often to check button and update display
+	pricePerLitre  = 1.50                 // Currency per litre
+	incrementRate  = 0.01                 // Litres added per increment
+	updateInterval = 5 * time.Millisecond // How often to check button and update display
 
 	// Splash screen settings
 	splashDuration = 3 * time.Second // How long to show splash screen
