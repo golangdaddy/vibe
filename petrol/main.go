@@ -34,6 +34,9 @@ const (
 	digitalFontPath1 = "fonts/digital.ttf"
 	digitalFontPath2 = "/usr/share/fonts/truetype/dseg/DSEG7Classic-Bold.ttf"
 	digitalFontPath3 = "/usr/local/share/fonts/DSEG7Classic-Bold.ttf"
+
+	// Base font path
+	baseFontPath = "fonts/modern-vision.ttf"
 )
 
 var (
@@ -44,13 +47,13 @@ var (
 
 	// Colors for petrol pump display
 	displayBg    = color.RGBA{R: 20, G: 20, B: 20, A: 255}
-	displayGreen = color.RGBA{R: 0, G: 255, B: 100, A: 255}
 	displayAmber = color.RGBA{R: 255, G: 200, B: 0, A: 255}
 	displayWhite = color.RGBA{R: 240, G: 240, B: 240, A: 255}
 	displayRed   = color.RGBA{R: 255, G: 50, B: 50, A: 255}
 
-	// Digital font resource
-	digitalFontResource fyne.Resource
+	// Font resources
+	digitalFontResource fyne.Resource // DSEG7 for numbers
+	baseFontResource    fyne.Resource // Modern Vision for interface
 )
 
 // customTheme wraps the default dark theme but uses our custom digital font
@@ -63,11 +66,19 @@ func newCustomTheme() fyne.Theme {
 }
 
 func (ct *customTheme) Font(style fyne.TextStyle) fyne.Resource {
+	// Use system default font for symbol text (basic font request, non-italic)
+	if style.Symbol {
+		return ct.Theme.Font(fyne.TextStyle{}) // Return default sans-serif
+	}
 	// Use digital font for monospace text (our numbers)
 	if style.Monospace && digitalFontResource != nil {
 		return digitalFontResource
 	}
-	// Fall back to default for everything else
+	// Use Modern Vision for all other text
+	if baseFontResource != nil {
+		return baseFontResource
+	}
+	// Fall back to default if fonts not loaded
 	return ct.Theme.Font(style)
 }
 
@@ -139,14 +150,14 @@ func (p *PetrolPump) updatePayButton() {
 // NewPayButton creates a new Bootstrap-style touchscreen-friendly pay button
 func NewPayButton(text string, onTapped func()) *PayButton {
 	pb := &PayButton{
-		background: canvas.NewRectangle(displayGreen),
+		background: canvas.NewRectangle(displayWhite),
 		shadow:     canvas.NewRectangle(color.RGBA{R: 0, G: 0, B: 0, A: 80}),
 		text:       canvas.NewText(text, color.White),
 		enabled:    false,
 		onTapped:   onTapped,
 	}
 
-	pb.text.TextSize = 42
+	pb.text.TextSize = 48
 	pb.text.Alignment = fyne.TextAlignCenter
 	pb.text.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -201,7 +212,7 @@ func (pb *PayButton) CreateRenderer() fyne.WidgetRenderer {
 
 // Implement fyne.Widget interface methods
 func (pb *PayButton) Size() fyne.Size {
-	return fyne.NewSize(400, 75)
+	return fyne.NewSize(480, 90)
 }
 
 func (pb *PayButton) Resize(size fyne.Size) {}
@@ -213,7 +224,7 @@ func (pb *PayButton) Position() fyne.Position {
 func (pb *PayButton) Move(pos fyne.Position) {}
 
 func (pb *PayButton) MinSize() fyne.Size {
-	return fyne.NewSize(400, 75)
+	return fyne.NewSize(480, 90)
 }
 
 func (pb *PayButton) Visible() bool {
@@ -253,7 +264,7 @@ func (r *payButtonRenderer) Layout(size fyne.Size) {
 
 func (r *payButtonRenderer) MinSize() fyne.Size {
 	// Bootstrap-like button size - larger for touchscreen
-	return fyne.NewSize(400, 75)
+	return fyne.NewSize(480, 90)
 }
 
 func (r *payButtonRenderer) Refresh() {
@@ -275,12 +286,6 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	// Create background
 	bg := canvas.NewRectangle(displayBg)
 
-	// Title/Brand - optimized for 1024x600
-	title := canvas.NewText("PETROL", displayWhite)
-	title.TextSize = 48
-	title.Alignment = fyne.TextAlignCenter
-	title.TextStyle = fyne.TextStyle{Bold: true}
-
 	// Debug mode indicator (if in debug mode)
 	var modeIndicator *canvas.Text
 	if debugMode {
@@ -291,34 +296,83 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	}
 
 	// LITRES display - value and unit on same line
-	p.litresLabel = createDigitalText("000.00", displayGreen, 110)
+	p.litresLabel = createDigitalText("000.00", displayWhite, 110)
 
-	litresUnit := canvas.NewText("L", displayGreen)
+	thisSaleTextSize := float32(60)
+
+	petrolLabel := canvas.NewText("PETROL", displayWhite)
+	petrolLabel.TextSize = 80
+	petrolLabel.Alignment = fyne.TextAlignCenter
+	petrolLabel.TextStyle = fyne.TextStyle{Bold: false}
+
+	thisSale := canvas.NewText("this", displayWhite)
+	thisSale.TextSize = thisSaleTextSize
+	thisSale.Alignment = fyne.TextAlignCenter
+	thisSale.TextStyle = fyne.TextStyle{Bold: false}
+
+	saleThis := canvas.NewText("sale", displayWhite)
+	saleThis.TextSize = thisSaleTextSize
+	saleThis.Alignment = fyne.TextAlignCenter
+	saleThis.TextStyle = fyne.TextStyle{Bold: false}
+
+	litresCurrencyUnit := canvas.NewText(" litres   £", displayWhite)
+	litresCurrencyUnit.TextSize = 80
+	litresCurrencyUnit.Alignment = fyne.TextAlignCenter
+	litresCurrencyUnit.TextStyle = fyne.TextStyle{Bold: true}
+
+	litresUnit := canvas.NewText("/L", displayWhite)
 	litresUnit.TextSize = 110
 	litresUnit.Alignment = fyne.TextAlignCenter
 	litresUnit.TextStyle = fyne.TextStyle{Bold: true}
 
-	// AMOUNT display - currency and value on same line
-	currencySymbol := canvas.NewText("$", displayGreen)
-	currencySymbol.TextSize = 110
-	currencySymbol.Alignment = fyne.TextAlignCenter
-	currencySymbol.TextStyle = fyne.TextStyle{Bold: true}
+	// Price per litre indicator - in digital font, smaller than main numbers
+	priceInfo := createDigitalText(fmt.Sprintf(" %.2f", pricePerLitre), displayWhite, 75)
 
-	p.amountLabel = createDigitalText("000.00", displayGreen, 110)
+	// AMOUNT display - currency and value on same line (using basic system font)
+	currencySymbol := createBasicText("£", displayWhite, 100)
 
-	// Price per litre indicator - optimized for 1024x600
-	priceInfo := canvas.NewText(fmt.Sprintf("Rate: $%.2f per litre", pricePerLitre), displayWhite)
-	priceInfo.TextSize = 24
-	priceInfo.Alignment = fyne.TextAlignCenter
+	p.amountLabel = createDigitalText("000.00", displayWhite, 110)
 
 	// Pay button (touchscreen) - optimized for 1024x600
 	p.payButton = NewPayButton("PAY", func() {
 		p.reset()
 	})
 
+	// Load logo for footer
+	var logoWidget fyne.CanvasObject
+	if _, err := os.Stat(logoPath); err == nil {
+		// Logo file exists
+		img := canvas.NewImageFromFile(logoPath)
+		img.FillMode = canvas.ImageFillContain
+		img.SetMinSize(fyne.NewSize(80, 80))
+		// Add padding around logo
+		logoWidget = container.NewPadded(img)
+	} else {
+		// Placeholder if logo not found (empty spacer)
+		logoWidget = layout.NewSpacer()
+	}
+
+	// Create footer with white background, logo on left, button on right
+	footerBg := canvas.NewRectangle(color.White)
+
+	// Footer content: logo left, spacer middle, button right
+	footerContent := container.NewBorder(
+		nil, nil,
+		logoWidget,                       // Left
+		container.NewPadded(p.payButton), // Right (with padding)
+		nil,                              // Center (empty)
+	)
+
+	// Stack footer background and content (no padding)
+	footer := container.NewStack(footerBg, footerContent)
+
 	// Decorative separator line - optimized for 1024x600
-	line1 := canvas.NewRectangle(displayGreen)
+	line1 := canvas.NewRectangle(displayWhite)
 	line1.SetMinSize(fyne.NewSize(700, 5))
+
+	// Fixed horizontal spacer for "this sale" layout
+	horizontalSpacer := canvas.NewRectangle(color.Transparent)
+	horizontalSpacer.SetMinSize(fyne.NewSize(40, 1))
 
 	// Build layout
 	var content *fyne.Container
@@ -328,68 +382,100 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 		statusLabel.TextSize = 18
 		statusLabel.Alignment = fyne.TextAlignCenter
 
-		content = container.New(layout.NewVBoxLayout(),
-			layout.NewSpacer(),
-			container.NewCenter(title),
-			container.NewCenter(modeIndicator),
-			layout.NewSpacer(),
-			layout.NewSpacer(),
-			// Litres with unit on same line
-			container.NewCenter(
-				container.NewHBox(
-					p.litresLabel,
-					litresUnit,
+		content = container.NewBorder(
+			nil,    // Top
+			footer, // Bottom - footer with button and logo
+			nil,    // Left
+			nil,    // Right
+			// Center content
+			container.New(layout.NewVBoxLayout(),
+				layout.NewSpacer(),
+				container.NewCenter(
+					container.NewHBox(
+						petrolLabel,
+						layout.NewSpacer(),
+						modeIndicator,
+					),
 				),
-			),
-			layout.NewSpacer(),
-			container.NewCenter(line1),
-			layout.NewSpacer(),
-			// Amount with currency on same line
-			container.NewCenter(
-				container.NewHBox(
-					currencySymbol,
-					p.amountLabel,
+				layout.NewSpacer(),
+				layout.NewSpacer(),
+				// Litres with unit on same line
+				container.NewCenter(
+					container.NewHBox(
+						p.litresLabel,
+						litresCurrencyUnit,
+						container.NewCenter(priceInfo),
+						litresUnit,
+					),
 				),
+				layout.NewSpacer(),
+				container.NewCenter(line1),
+
+				// Rate (price per litre) - above amount
+				layout.NewSpacer(),
+				// Amount with currency on same line
+				container.NewCenter(
+					container.NewHBox(
+						container.NewVBox(
+							layout.NewSpacer(),
+							thisSale,
+							saleThis,
+							layout.NewSpacer(),
+						),
+						horizontalSpacer,
+						currencySymbol,
+						p.amountLabel,
+					),
+				),
+				layout.NewSpacer(),
+				layout.NewSpacer(),
+				container.NewCenter(statusLabel),
+				layout.NewSpacer(),
 			),
-			layout.NewSpacer(),
-			layout.NewSpacer(),
-			container.NewCenter(priceInfo),
-			layout.NewSpacer(),
-			container.NewCenter(p.payButton),
-			layout.NewSpacer(),
-			container.NewCenter(statusLabel),
-			layout.NewSpacer(),
 		)
 	} else {
 		// Normal mode: clean display without instructions
-		content = container.New(layout.NewVBoxLayout(),
-			layout.NewSpacer(),
-			container.NewCenter(title),
-			layout.NewSpacer(),
-			layout.NewSpacer(),
-			// Litres with unit on same line
-			container.NewCenter(
-				container.NewHBox(
-					p.litresLabel,
-					litresUnit,
+		content = container.NewBorder(
+			nil,    // Top
+			footer, // Bottom - footer with button and logo
+			nil,    // Left
+			nil,    // Right
+			// Center content
+			container.New(layout.NewVBoxLayout(),
+				layout.NewSpacer(),
+				layout.NewSpacer(),
+				layout.NewSpacer(),
+				// Litres with unit on same line
+				container.NewCenter(
+					container.NewHBox(
+						p.litresLabel,
+						litresCurrencyUnit,
+						priceInfo,
+						litresUnit,
+					),
 				),
-			),
-			layout.NewSpacer(),
-			container.NewCenter(line1),
-			layout.NewSpacer(),
-			// Amount with currency on same line
-			container.NewCenter(
-				container.NewHBox(
-					currencySymbol,
-					p.amountLabel,
+				layout.NewSpacer(),
+				container.NewCenter(line1),
+
+				// Rate (price per litre) - above amount
+				layout.NewSpacer(),
+				// Amount with currency on same line
+				container.NewCenter(
+					container.NewHBox(
+						container.NewVBox(
+							layout.NewSpacer(),
+							thisSale,
+							saleThis,
+							layout.NewSpacer(),
+						),
+						horizontalSpacer,
+						currencySymbol,
+						p.amountLabel,
+					),
 				),
+				layout.NewSpacer(),
+				layout.NewSpacer(),
 			),
-			layout.NewSpacer(),
-			layout.NewSpacer(),
-			container.NewCenter(priceInfo),
-			layout.NewSpacer(),
-			container.NewCenter(p.payButton),
-			layout.NewSpacer(),
 		)
 	}
 
@@ -415,7 +501,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 			// ESC to exit works in both modes
 			fmt.Printf("\nFinal totals:\n")
 			fmt.Printf("  Litres: %.2f L\n", p.litres)
-			fmt.Printf("  Amount: $%.2f\n", p.amount)
+			fmt.Printf("  Amount: £%.2f\n", p.amount)
 			a.Quit()
 		}
 	})
@@ -495,6 +581,15 @@ func createDigitalText(text string, col color.Color, size float32) *canvas.Text 
 	return txt
 }
 
+func createBasicText(text string, col color.Color, size float32) *canvas.Text {
+	txt := canvas.NewText(text, col)
+	txt.TextSize = size
+	txt.Alignment = fyne.TextAlignCenter
+	// Use Symbol flag to signal the theme to use system default font (non-italic)
+	txt.TextStyle = fyne.TextStyle{Symbol: true}
+	return txt
+}
+
 // loadDigitalFont tries to load digital display font from various locations
 func loadDigitalFont() {
 	fontPaths := []string{
@@ -520,11 +615,23 @@ func loadDigitalFont() {
 	fmt.Println("    - /usr/share/fonts/truetype/dseg/DSEG7Classic-Bold.ttf")
 }
 
+// loadBaseFont tries to load the Modern Vision base font
+func loadBaseFont() {
+	if data, err := os.ReadFile(baseFontPath); err == nil {
+		baseFontResource = fyne.NewStaticResource("modernvision", data)
+		fmt.Printf("✓ Loaded base font from: %s\n", baseFontPath)
+	} else {
+		fmt.Printf("ℹ Base font (Modern Vision) not found at: %s\n", baseFontPath)
+		fmt.Println("  Using default font as fallback")
+	}
+}
+
 func main() {
 	var button rpio.Pin
 
-	// Load digital font if available
+	// Load fonts if available
 	loadDigitalFont()
+	loadBaseFont()
 
 	// Try to initialize GPIO
 	err := rpio.Open()
@@ -565,7 +672,7 @@ func runGraphicalMode(button rpio.Pin) {
 
 	// Create GUI application
 	myApp := app.New()
-	
+
 	// Set custom theme to use digital font
 	myApp.Settings().SetTheme(newCustomTheme())
 
@@ -600,7 +707,7 @@ func setupSignalHandling(myApp fyne.App, pump *PetrolPump) {
 		<-sigChan
 		fmt.Printf("\nFinal totals:\n")
 		fmt.Printf("  Litres: %.2f L\n", pump.litres)
-		fmt.Printf("  Amount: $%.2f\n", pump.amount)
+		fmt.Printf("  Amount: £%.2f\n", pump.amount)
 		myApp.Quit()
 	}()
 }

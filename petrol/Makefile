@@ -1,7 +1,7 @@
-.PHONY: all build run install-font setup-fontconfig clean help test-font
+.PHONY: all build run install-base-font install-font setup-fontconfig clean help test-font
 
 # Default target
-all: install-font build
+all: install-base-font install-font build
 
 # Build the petrol pump program
 build:
@@ -13,6 +13,20 @@ build:
 run: build
 	@echo "Starting petrol pump display..."
 	./petrol-pump
+
+# Install Modern Vision base font
+install-base-font:
+	@echo "Installing Modern Vision font..."
+	@mkdir -p fonts
+	@if [ -f fonts/modern-vision.ttf ]; then \
+		echo "✓ fonts/modern-vision.ttf already exists"; \
+	else \
+		echo "Downloading Modern Vision font..."; \
+		curl -L "https://dl.dafont.com/dl/?f=modern_vision" -o fonts/modern-vision.zip && \
+		cd fonts && unzip -o modern-vision.zip modern-vision.ttf && rm modern-vision.zip && \
+		echo "✓ Downloaded and installed Modern Vision font"; \
+	fi
+	@ls -lh fonts/modern-vision.ttf 2>/dev/null || true
 
 # Install DSEG7 digital font to project directory
 install-font:
@@ -35,8 +49,8 @@ install-font:
 setup-fontconfig:
 	@./setup-font.sh
 
-# Full setup: install font, configure system, and build
-setup: install-font setup-fontconfig build
+# Full setup: install fonts, configure system, and build
+setup: install-base-font install-font setup-fontconfig build
 	@echo ""
 	@echo "==================================="
 	@echo "✓ Setup complete!"
@@ -79,10 +93,10 @@ clean:
 	@rm -f petrol-pump
 	@echo "✓ Clean complete"
 
-# Clean everything including font
+# Clean everything including fonts
 clean-all: clean
-	@echo "Removing installed font..."
-	@rm -f fonts/digital.ttf
+	@echo "Removing installed fonts..."
+	@rm -f fonts/digital.ttf fonts/modern-vision.ttf
 	@echo "✓ All clean"
 
 # Help target
@@ -90,15 +104,16 @@ help:
 	@echo "Petrol Pump Display - Makefile Commands"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make              - Install font and build program"
-	@echo "  make setup        - Full setup (font + fontconfig + build)"
+	@echo "  make              - Install fonts and build program"
+	@echo "  make setup        - Full setup (fonts + fontconfig + build)"
 	@echo "  make build        - Build the program"
 	@echo "  make run          - Build and run the program"
+	@echo "  make install-base-font - Install Modern Vision font"
 	@echo "  make install-font - Install DSEG7 font to project"
 	@echo "  make setup-fontconfig - Configure system to use DSEG7"
 	@echo "  make test-font    - Test font configuration"
 	@echo "  make clean        - Remove build artifacts"
-	@echo "  make clean-all    - Remove build artifacts and font"
+	@echo "  make clean-all    - Remove build artifacts and fonts"
 	@echo "  make help         - Show this help message"
 	@echo ""
 	@echo "Quick Start:"

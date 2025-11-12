@@ -45,11 +45,11 @@ This means you can develop and test on your laptop, then deploy to the Raspberry
 │             ──────────────────────────────                 │
 │                                                            │
 │                        AMOUNT                              │
-│                      $  18.75                              │
+│                      £  18.75                              │
 │                                                            │
 │             ──────────────────────────────                 │
 │                                                            │
-│                  Rate: $1.50 per litre                     │
+│                  Rate: £1.50 per litre                     │
 │           Press and hold button to pump                    │
 │                                                            │
 └────────────────────────────────────────────────────────────┘
@@ -80,12 +80,12 @@ dark background - looks like a real petrol pump!
 
                      AMOUNT
 
-                      $  ▓ ▓  ▪  ▓▓▓  ▓▓▓
+                      £  ▓ ▓  ▪  ▓▓▓  ▓▓▓
 
 
               ───────────────────────────────
 
-               Rate: $1.50 per litre
+               Rate: £1.50 per litre
 
 
           [SPACE] Pump  [R] Reset  [Ctrl+C] Exit
