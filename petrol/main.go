@@ -168,12 +168,22 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 		return nil, fmt.Errorf("failed to find RST pin (tried GPIO22, 22, BCM22, GPIO25, 25, BCM25)")
 	}
 
-	// Don't use IRQ - it's often not connected
-	// We'll use polling mode instead which is more reliable
-	fmt.Println("  Using polling mode (IRQ not required)")
-	irqPin := gpio.INVALID
+	// Get an IRQ pin - we'll use GPIO24 even if not physically connected
+	// The library requires a valid pin, but polling mode doesn't actually use it
+	var irqPin gpio.PinIn
+	for _, pinName := range []string{"GPIO24", "24", "BCM24"} {
+		if pin := gpioreg.ByName(pinName); pin != nil {
+			irqPin = pin
+			fmt.Printf("  Using GPIO24 for IRQ (not physically required)\n")
+			break
+		}
+	}
 
-	// Create MFRC522 device with SPI port and pins (polling mode)
+	if irqPin == nil {
+		return nil, fmt.Errorf("could not find GPIO24 for IRQ pin")
+	}
+
+	// Create MFRC522 device with SPI port and pins (will use polling, not interrupts)
 	dev, err := mfrc522.NewSPI(port, rstPin, irqPin)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MFRC522 device: %w", err)
@@ -203,15 +213,16 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 	attempts := 0
 	for time.Since(testStart) < 5*time.Second {
 		attempts++
-		uid, err := dev.ReadUID(200 * time.Millisecond)
+		// Use shorter timeout for polling - we check frequently anyway
+		uid, err := dev.ReadUID(50 * time.Millisecond)
 
 		// Show progress every second
-		if attempts%5 == 1 {
+		if attempts%10 == 1 {
 			elapsed := time.Since(testStart).Seconds()
 			fmt.Printf("  [%.0fs] Scanning... (%d attempts so far)\n", elapsed, attempts)
 		}
 
-		if err != nil && attempts%10 == 0 {
+		if err != nil && attempts%20 == 0 {
 			fmt.Printf("  [DEBUG] Error on attempt %d: %v\n", attempts, err)
 		}
 
@@ -220,7 +231,7 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 			fmt.Println("  Your RFID reader is working correctly!")
 			return reader, nil
 		}
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	fmt.Printf("\n  ⚠ No card detected during %d attempts over 5 seconds\n", attempts)
@@ -235,12 +246,12 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 }
 
 func (r *MFRC522RFIDReader) IsCardPresent() (bool, error) {
-	// Try to detect a card - use minimal timeout since we check frequently
-	uid, err := r.dev.ReadUID(300 * time.Millisecond)
+	// Try to detect a card - use short timeout for responsive polling
+	uid, err := r.dev.ReadUID(50 * time.Millisecond)
 	if err != nil {
 		// Check if it's a real error or just no card
 		errStr := err.Error()
-		if errStr != "timeout" && errStr != "no tag" {
+		if errStr != "timeout" && errStr != "no tag" && errStr != "timeout waiting for irq edge 50ms" {
 			fmt.Printf("DEBUG: ReadUID error: %v\n", err)
 		}
 		return false, nil
@@ -263,8 +274,8 @@ func (r *MFRC522RFIDReader) ReadCardID() (string, error) {
 		return r.lastCardID, nil
 	}
 
-	// Try to read card again
-	uid, err := r.dev.ReadUID(100 * time.Millisecond)
+	// Try to read card again with short timeout
+	uid, err := r.dev.ReadUID(50 * time.Millisecond)
 	if err != nil {
 		return "", fmt.Errorf("failed to read card: %w", err)
 	}
