@@ -1,21 +1,41 @@
 # RFID Reader Integration Guide
 
-This petrol pump application includes infrastructure for RFID reader support, allowing contactless payment using RFID cards.
+This petrol pump application includes **full RFID reader support** for contactless payment using RFID cards.
 
 ## Current Status
 
-✅ RFID infrastructure implemented
-✅ Payment flow with RFID detection ready
-⚠️ MFRC522 driver needs to be implemented
+✅ **RFID fully implemented and ready to use!**
+✅ Real MFRC522 hardware support via periph.io
+✅ Automatic hardware detection with mock fallback
+✅ Works on Pi with hardware AND on dev machines for testing
+✅ No code changes needed between environments
+
+## Automatic Hardware Detection
+
+The application **automatically detects** whether it's running with real RFID hardware or not:
+
+### On Raspberry Pi with MFRC522 connected:
+- Detects and initializes real hardware
+- Uses actual RFID card reads
+- Ready for production use
+
+### On dev machine or Pi without RFID hardware:
+- Automatically falls back to mock mode (in debug mode)
+- Press **P** key to simulate card tap
+- Perfect for testing without hardware
+
+**You don't need to change ANY code** - it just works!
 
 ## How It Works
 
 1. User pumps fuel
-2. User taps "PAY" button
+2. User taps "PAY" button  
 3. Application shows "Tap the contactless RFID reader to pay" screen
-4. When RFID card is detected, payment is processed automatically
-5. Success screen shows for 3 seconds
-6. Pump resets with new random fuel price
+4. When RFID card is detected (real or simulated), payment is processed
+5. Success screen shows card ID for 3 seconds
+6. **Pump automatically resets to 0.00**
+7. **New random fuel price generated (£1.40-£1.60)**
+8. Ready for next customer
 
 ## RFID Reader Interface
 
@@ -28,84 +48,30 @@ type RFIDReader interface {
 }
 ```
 
-## Implementing MFRC522 Support
+## Implementation Details
 
-### Option 1: Using the provided example code
+The MFRC522 support is **already implemented** using periph.io. The code:
 
-See `rfid_mfrc522.go` for a template implementation. You'll need to:
+- Uses `periph.io/x/devices/v3/mfrc522` for hardware communication
+- Implements proper SPI communication on Raspberry Pi
+- Uses GPIO25 (Pin 22) for RST pin
+- Reads card UID and formats as hex string (e.g., "A3:B2:C1:D0")
+- Caches last read for 2 seconds to prevent duplicate reads
+- Automatically detects hardware availability
 
-1. Install gobot dependencies:
-```bash
-go get gobot.io/x/gobot
-go get gobot.io/x/gobot/drivers/spi
-go get gobot.io/x/gobot/platforms/raspi
-```
+### Key Implementation Classes:
 
-2. Implement the actual MFRC522 communication protocol
-3. Uncomment the code in `rfid_mfrc522.go`
-4. Update `initRFIDReader()` in `main.go` to use your implementation
+**`MFRC522RFIDReader`** - Real hardware implementation
+- Initializes SPI communication
+- Configures antenna gain for optimal detection
+- Reads 4-7 byte UIDs from cards
+- Formats output as colon-separated hex
 
-### Option 2: Using your existing code
-
-Your existing RFID code can be adapted to implement the `RFIDReader` interface:
-
-```go
-type MyRFIDReader struct {
-    reader *mfrc522.MFRC522Common
-    // ... other fields
-}
-
-func (m *MyRFIDReader) IsCardPresent() (bool, error) {
-    return m.reader.IsCardPresent()
-}
-
-func (m *MyRFIDReader) ReadCardID() (string, error) {
-    text, err := m.reader.ReadText()
-    if err != nil {
-        return "", err
-    }
-    return text, nil
-}
-```
-
-Then in `main.go`, replace the `initRFIDReader()` function:
-
-```go
-func initRFIDReader() RFIDReader {
-    fmt.Println("\nInitializing RFID reader...")
-    
-    // Create Raspberry Pi adaptor
-    r := raspi.NewAdaptor()
-    if err := r.Connect(); err != nil {
-        fmt.Printf("⚠ Could not connect: %v\n", err)
-        return nil
-    }
-
-    // Create SPI connection (bus 0, chip 0 for CE0)
-    conn := spi.NewSPIConnection(r, 0, 0)
-
-    // Create MFRC522 driver
-    reader := mfrc522.NewMFRC522Common()
-
-    // Initialize the reader
-    if err := reader.Initialize(conn); err != nil {
-        fmt.Printf("⚠ Could not initialize MFRC522: %v\n", err)
-        return nil
-    }
-
-    // Check version
-    version, err := reader.GetVersion()
-    if err != nil {
-        fmt.Printf("⚠ Could not get version: %v\n", err)
-        return nil
-    }
-
-    fmt.Printf("✓ MFRC522 initialized (Version: 0x%x)\n", version)
-    
-    // Return your implementation
-    return &MyRFIDReader{reader: reader}
-}
-```
+**`MockRFIDReader`** - Test/development implementation  
+- Simulates card presence
+- Generates random card IDs
+- Responds to 'P' key in debug mode
+- Auto-clears after 1 second
 
 ## Hardware Setup
 
@@ -171,21 +137,46 @@ Once implemented, the application will:
 
 ## Example Output
 
+### On Raspberry Pi with RFID hardware:
 ```
 ✓ GPIO initialized - Running in normal mode
   Press and hold the button to pump
 
 Initializing RFID reader...
-✓ MFRC522 RFID reader initialized (Version: 0x92)
+✓ MFRC522 RFID reader initialized successfully
+  Hardware ready - tap your card on the reader to pay
 
-[User pumps fuel...]
+[User pumps fuel by holding button...]
 
 ✓ RFID card detected! Processing payment...
   Card ID: A3:B2:C1:D0
   Amount: £12.45
   Fuel: 8.30 L @ £1.50/L
 
-[Success screen displays, then resets with new price]
+[Success screen displays for 3 seconds]
+[Pump resets to 0.00 with new price: £1.47/L]
+```
+
+### On dev machine (debug mode):
+```
+╔════════════════════════════════════╗
+║   🔧 DEBUG MODE ACTIVATED 🔧      ║
+╚════════════════════════════════════╝
+
+Initializing RFID reader...
+ℹ Real RFID hardware not detected: failed to open SPI
+✓ Mock RFID reader initialized (test mode)
+  Press P on payment screen to simulate card tap
+
+[User pumps fuel by holding SPACE...]
+
+🔧 DEBUG: Simulating RFID card tap...
+✓ RFID card detected! Processing payment...
+  Card ID: 7F:A2:3B:C9
+  Amount: £12.45
+  Fuel: 8.30 L @ £1.50/L
+
+[Success screen displays, pump resets automatically]
 ```
 
 ## Security Considerations

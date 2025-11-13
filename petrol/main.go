@@ -17,6 +17,11 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/stianeikeland/go-rpio/v4"
+	"periph.io/x/conn/v3/gpio"
+	"periph.io/x/conn/v3/gpio/gpioreg"
+	"periph.io/x/conn/v3/spi/spireg"
+	"periph.io/x/devices/v3/mfrc522"
+	"periph.io/x/host/v3"
 )
 
 const (
@@ -92,6 +97,130 @@ type RFIDReader interface {
 	ReadCardID() (string, error)
 }
 
+// MockRFIDReader simulates an RFID reader for testing
+type MockRFIDReader struct {
+	cardPresent bool
+	cardID      string
+}
+
+func (m *MockRFIDReader) IsCardPresent() (bool, error) {
+	return m.cardPresent, nil
+}
+
+func (m *MockRFIDReader) ReadCardID() (string, error) {
+	if m.cardPresent {
+		return m.cardID, nil
+	}
+	return "", fmt.Errorf("no card present")
+}
+
+func (m *MockRFIDReader) SimulateTap() {
+	// Generate a random card ID for simulation
+	m.cardID = fmt.Sprintf("%02X:%02X:%02X:%02X",
+		rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
+	m.cardPresent = true
+
+	// Auto-clear after a short time
+	go func() {
+		time.Sleep(1 * time.Second)
+		m.cardPresent = false
+	}()
+}
+
+// MFRC522RFIDReader implements the RFIDReader interface for real MFRC522 hardware
+type MFRC522RFIDReader struct {
+	dev        *mfrc522.Dev
+	lastCardID string
+	lastSeen   time.Time
+}
+
+func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
+	// Initialize periph.io host
+	if _, err := host.Init(); err != nil {
+		return nil, fmt.Errorf("failed to initialize periph: %w", err)
+	}
+
+	// Open SPI port
+	port, err := spireg.Open("")
+	if err != nil {
+		return nil, fmt.Errorf("failed to open SPI: %w", err)
+	}
+
+	// Get GPIO pins for RST and IRQ
+	// RST pin (GPIO25/Pin 22) - required
+	rstPin := gpioreg.ByName("GPIO25")
+	if rstPin == nil {
+		return nil, fmt.Errorf("failed to get RST pin (GPIO25)")
+	}
+
+	// IRQ pin (we can use gpio.INVALID if not connected)
+	irqPin := gpio.INVALID
+
+	// Create MFRC522 device with SPI port and pins
+	dev, err := mfrc522.NewSPI(port, rstPin, irqPin, mfrc522.WithSync())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MFRC522 device: %w", err)
+	}
+
+	// Set antenna gain for better detection
+	if err := dev.SetAntennaGain(7); err != nil {
+		return nil, fmt.Errorf("failed to set antenna gain: %w", err)
+	}
+
+	return &MFRC522RFIDReader{
+		dev: dev,
+	}, nil
+}
+
+func (r *MFRC522RFIDReader) IsCardPresent() (bool, error) {
+	// Try to detect a card
+	uid, err := r.dev.ReadUID(100 * time.Millisecond)
+	if err != nil {
+		// No card present or read error
+		return false, nil
+	}
+
+	if len(uid) > 0 {
+		// Card detected - store the ID
+		r.lastCardID = formatUID(uid)
+		r.lastSeen = time.Now()
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (r *MFRC522RFIDReader) ReadCardID() (string, error) {
+	// Return the last seen card ID if it was recent
+	if time.Since(r.lastSeen) < 2*time.Second && r.lastCardID != "" {
+		return r.lastCardID, nil
+	}
+
+	// Try to read card again
+	uid, err := r.dev.ReadUID(100 * time.Millisecond)
+	if err != nil {
+		return "", fmt.Errorf("failed to read card: %w", err)
+	}
+
+	if len(uid) == 0 {
+		return "", fmt.Errorf("no card present")
+	}
+
+	r.lastCardID = formatUID(uid)
+	r.lastSeen = time.Now()
+	return r.lastCardID, nil
+}
+
+// formatUID converts byte array to hex string format
+func formatUID(uid []byte) string {
+	parts := make([]string, len(uid))
+	for i, b := range uid {
+		parts[i] = fmt.Sprintf("%02X", b)
+	}
+	return fmt.Sprintf("%s", parts[0]) + ":" + fmt.Sprintf("%s", parts[1]) + ":" +
+		fmt.Sprintf("%s", parts[2]) + ":" + fmt.Sprintf("%s", parts[3])
+}
+
 type PetrolPump struct {
 	litres           float64
 	amount           float64
@@ -104,6 +233,7 @@ type PetrolPump struct {
 	payButton        *PayButton
 	rateLabel        *canvas.Text
 	rfidReader       RFIDReader
+	mockRFIDReader   *MockRFIDReader
 	rfidCheckTicker  *time.Ticker
 	onPaymentScreen  bool
 	isPumping        bool
@@ -614,7 +744,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	var content *fyne.Container
 	if debugMode {
 		// Debug mode: show control instructions
-		statusLabel := canvas.NewText("Hold SPACE to pump • Press R to reset • ESC to exit", displayWhite)
+		statusLabel := canvas.NewText("Hold SPACE to pump • Press P to tap RFID • Press R to reset • ESC to exit", displayWhite)
 		statusLabel.TextSize = 14
 		statusLabel.Alignment = fyne.TextAlignCenter
 
@@ -699,7 +829,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	p.window = w
 	w.SetContent(container.NewStack(bg, content))
 
-	// Handle keyboard - ESC and R work in both modes, SPACE only in debug mode
+	// Handle keyboard - ESC and R work in both modes, SPACE and P only in debug mode
 	w.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
 		switch key.Name {
 		case fyne.KeySpace:
@@ -707,6 +837,12 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 			if debugMode {
 				keyPressed = true
 				lastKeyPressTime = time.Now()
+			}
+		case fyne.KeyP:
+			// Only allow P to simulate RFID tap in debug mode
+			if debugMode && p.mockRFIDReader != nil {
+				fmt.Println("🔧 DEBUG: Simulating RFID card tap...")
+				p.mockRFIDReader.SimulateTap()
 			}
 		case fyne.KeyR:
 			// Reset works in both modes
@@ -1030,6 +1166,7 @@ func main() {
 		fmt.Println("║  GRAPHICAL display with keyboard   ║")
 		fmt.Println("║                                    ║")
 		fmt.Println("║  Hold SPACE to pump petrol         ║")
+		fmt.Println("║  Press P to simulate RFID tap      ║")
 		fmt.Println("║  Press R to reset                  ║")
 		fmt.Println("║  Press ESC to exit                 ║")
 		fmt.Println("║                                    ║")
@@ -1055,18 +1192,30 @@ func main() {
 }
 
 // initRFIDReader tries to initialize the MFRC522 RFID reader
-// Returns nil if reader cannot be initialized
+// Automatically detects if running on Pi with real hardware or in test mode
+// Returns mock reader if real hardware not available
 func initRFIDReader() RFIDReader {
 	fmt.Println("\nInitializing RFID reader...")
 
-	// TODO: Implement actual RFID reader initialization
-	// This is a placeholder that you can replace with actual MFRC522 code
-	// Example implementation would go here using SPI communication
+	// Try to initialize real MFRC522 hardware first
+	reader, err := NewMFRC522RFIDReader()
+	if err == nil {
+		fmt.Println("✓ MFRC522 RFID reader initialized successfully")
+		fmt.Println("  Hardware ready - tap your card on the reader to pay")
+		return reader
+	}
 
-	fmt.Println("⚠ RFID reader initialization not yet implemented")
-	fmt.Println("  To add RFID support, implement the RFIDReader interface")
-	fmt.Println("  Payment screen will still work in manual mode")
+	// Real hardware not available - use mock for testing
+	fmt.Printf("ℹ Real RFID hardware not detected: %v\n", err)
 
+	if debugMode {
+		fmt.Println("✓ Mock RFID reader initialized (test mode)")
+		fmt.Println("  Press P on payment screen to simulate card tap")
+		return &MockRFIDReader{}
+	}
+
+	fmt.Println("  RFID reader will not be available")
+	fmt.Println("  Payment screen will work in manual mode only")
 	return nil
 }
 
@@ -1074,6 +1223,11 @@ func runGraphicalMode(button rpio.Pin, rfidReader RFIDReader) {
 	pump := NewPetrolPump()
 	pump.button = button
 	pump.rfidReader = rfidReader
+
+	// Store mock reader reference if in debug mode
+	if mockReader, ok := rfidReader.(*MockRFIDReader); ok {
+		pump.mockRFIDReader = mockReader
+	}
 
 	// Create GUI application
 	myApp := app.New()
