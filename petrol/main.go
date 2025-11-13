@@ -147,10 +147,25 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 	}
 
 	// Get GPIO pins for RST and IRQ
-	// RST pin (GPIO25/Pin 22) - required
-	rstPin := gpioreg.ByName("GPIO25")
+	// Try multiple ways to get the RST pin (GPIO25/Pin 22)
+	var rstPin gpio.PinOut
+
+	// Try different pin references
+	for _, pinName := range []string{"GPIO25", "25", "22"} {
+		if pin := gpioreg.ByName(pinName); pin != nil {
+			rstPin = pin
+			fmt.Printf("  Found RST pin: %s\n", pinName)
+			break
+		}
+	}
+
 	if rstPin == nil {
-		return nil, fmt.Errorf("failed to get RST pin (GPIO25)")
+		// If we can't find the pin, list available pins for debugging
+		fmt.Println("  Available GPIO pins:")
+		for _, pin := range gpioreg.All() {
+			fmt.Printf("    - %s\n", pin.Name())
+		}
+		return nil, fmt.Errorf("failed to find RST pin (tried GPIO25, 25, 22)")
 	}
 
 	// IRQ pin (we can use gpio.INVALID if not connected)
