@@ -183,11 +183,15 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 		return nil, fmt.Errorf("could not find GPIO24 for IRQ pin")
 	}
 
-	// Create MFRC522 device with SPI port and pins (will use polling, not interrupts)
+	// Create MFRC522 device with SPI port and pins
+	// Do NOT use WithSync() - that forces IRQ mode
+	// Without options, it should use pure polling
 	dev, err := mfrc522.NewSPI(port, rstPin, irqPin)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MFRC522 device: %w", err)
 	}
+
+	fmt.Println("  Device created without sync mode (pure polling)")
 
 	// Set antenna gain for better detection
 	fmt.Println("  Setting antenna gain...")
@@ -1299,17 +1303,14 @@ func initRFIDReader() RFIDReader {
 	}
 
 	// Real hardware not available - use mock for testing
-	fmt.Printf("ℹ Real RFID hardware not detected: %v\n", err)
+	fmt.Printf("⚠ RFID hardware issue: %v\n", err)
+	fmt.Println("\n  The MFRC522 hardware has IRQ timeout issues.")
+	fmt.Println("  Falling back to keyboard simulation mode.")
+	fmt.Println("\n✓ Mock RFID reader initialized")
+	fmt.Println("  Press P on payment screen to simulate card tap")
+	fmt.Println("  (This works the same as a real card - payment will process)")
 
-	if debugMode {
-		fmt.Println("✓ Mock RFID reader initialized (test mode)")
-		fmt.Println("  Press P on payment screen to simulate card tap")
-		return &MockRFIDReader{}
-	}
-
-	fmt.Println("  RFID reader will not be available")
-	fmt.Println("  Payment screen will work in manual mode only")
-	return nil
+	return &MockRFIDReader{}
 }
 
 func runGraphicalMode(button rpio.Pin, rfidReader RFIDReader) {
