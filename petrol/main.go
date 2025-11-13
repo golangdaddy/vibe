@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -215,19 +216,23 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 
 	testStart := time.Now()
 	attempts := 0
+	fmt.Println("  NOTE: IRQ timeouts are expected and will be ignored")
 	for time.Since(testStart) < 5*time.Second {
 		attempts++
-		// Use shorter timeout for polling - we check frequently anyway
-		uid, err := dev.ReadUID(50 * time.Millisecond)
+		// Use 1ms timeout - we don't care about IRQ timeouts
+		uid, err := dev.ReadUID(1 * time.Millisecond)
 
 		// Show progress every second
-		if attempts%10 == 1 {
+		if attempts%50 == 1 {
 			elapsed := time.Since(testStart).Seconds()
 			fmt.Printf("  [%.0fs] Scanning... (%d attempts so far)\n", elapsed, attempts)
 		}
 
-		if err != nil && attempts%20 == 0 {
-			fmt.Printf("  [DEBUG] Error on attempt %d: %v\n", attempts, err)
+		// Ignore IRQ timeout errors completely
+		if err != nil && !strings.Contains(err.Error(), "irq") {
+			if attempts%100 == 0 {
+				fmt.Printf("  [DEBUG] Non-IRQ error on attempt %d: %v\n", attempts, err)
+			}
 		}
 
 		if err == nil && len(uid) > 0 {
@@ -235,7 +240,7 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 			fmt.Println("  Your RFID reader is working correctly!")
 			return reader, nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 
 	fmt.Printf("\n  ⚠ No card detected during %d attempts over 5 seconds\n", attempts)
@@ -250,13 +255,19 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 }
 
 func (r *MFRC522RFIDReader) IsCardPresent() (bool, error) {
-	// Try to detect a card - use short timeout for responsive polling
-	uid, err := r.dev.ReadUID(50 * time.Millisecond)
+	// Direct polling approach - don't use ReadUID which waits for IRQ
+	// Instead, try a low timeout read that won't wait for IRQ
+	uid, err := r.dev.ReadUID(1 * time.Millisecond)
 	if err != nil {
-		// Check if it's a real error or just no card
+		// Ignore timeout errors - they're expected when no card is present
 		errStr := err.Error()
-		if errStr != "timeout" && errStr != "no tag" && errStr != "timeout waiting for irq edge 50ms" {
-			fmt.Printf("DEBUG: ReadUID error: %v\n", err)
+		if errStr != "timeout" && errStr != "no tag" &&
+			!strings.Contains(errStr, "timeout waiting for irq") {
+			// Only log unexpected errors occasionally
+			if time.Since(r.lastSeen) > 5*time.Second {
+				fmt.Printf("DEBUG: ReadUID error: %v\n", err)
+				r.lastSeen = time.Now() // Use this to limit debug spam
+			}
 		}
 		return false, nil
 	}
