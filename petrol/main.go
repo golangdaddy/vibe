@@ -196,16 +196,35 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 		return nil, fmt.Errorf("failed to set antenna gain: %w", err)
 	}
 
-	return &MFRC522RFIDReader{
+	reader := &MFRC522RFIDReader{
 		dev: dev,
-	}, nil
+	}
+
+	// Test read to verify hardware is working
+	fmt.Println("  Testing card detection (hold card near reader for 3 seconds)...")
+	testStart := time.Now()
+	for time.Since(testStart) < 3*time.Second {
+		uid, err := dev.ReadUID(200 * time.Millisecond)
+		if err == nil && len(uid) > 0 {
+			fmt.Printf("  ✓ Test successful! Detected card: %s\n", formatUID(uid))
+			return reader, nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	fmt.Println("  ⚠ No card detected during test (this is OK if no card was present)")
+	return reader, nil
 }
 
 func (r *MFRC522RFIDReader) IsCardPresent() (bool, error) {
-	// Try to detect a card with longer timeout
-	uid, err := r.dev.ReadUID(500 * time.Millisecond)
+	// Try to detect a card - use minimal timeout since we check frequently
+	uid, err := r.dev.ReadUID(300 * time.Millisecond)
 	if err != nil {
-		// No card present or read error (this is normal when no card)
+		// Check if it's a real error or just no card
+		errStr := err.Error()
+		if errStr != "timeout" && errStr != "no tag" {
+			fmt.Printf("DEBUG: ReadUID error: %v\n", err)
+		}
 		return false, nil
 	}
 
@@ -213,7 +232,7 @@ func (r *MFRC522RFIDReader) IsCardPresent() (bool, error) {
 		// Card detected - store the ID
 		r.lastCardID = formatUID(uid)
 		r.lastSeen = time.Now()
-		fmt.Printf("DEBUG: Card detected, UID length: %d bytes\n", len(uid))
+		fmt.Printf("✓✓✓ Card detected! UID length: %d bytes, ID: %s\n", len(uid), r.lastCardID)
 		return true, nil
 	}
 
