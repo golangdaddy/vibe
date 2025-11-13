@@ -151,7 +151,7 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 	var rstPin gpio.PinOut
 
 	// Try different pin references
-	for _, pinName := range []string{"GPIO25", "25", "22"} {
+	for _, pinName := range []string{"GPIO25", "25", "BCM25"} {
 		if pin := gpioreg.ByName(pinName); pin != nil {
 			rstPin = pin
 			fmt.Printf("  Found RST pin: %s\n", pinName)
@@ -165,11 +165,25 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 		for _, pin := range gpioreg.All() {
 			fmt.Printf("    - %s\n", pin.Name())
 		}
-		return nil, fmt.Errorf("failed to find RST pin (tried GPIO25, 25, 22)")
+		return nil, fmt.Errorf("failed to find RST pin (tried GPIO25, 25, BCM25)")
 	}
 
-	// IRQ pin (we can use gpio.INVALID if not connected)
-	irqPin := gpio.INVALID
+	// IRQ pin - try to get GPIO24, or use a dummy pin if not available
+	// Many setups don't connect IRQ, so we need a valid but unused pin
+	var irqPin gpio.PinIn
+	for _, pinName := range []string{"GPIO24", "24", "BCM24"} {
+		if pin := gpioreg.ByName(pinName); pin != nil {
+			irqPin = pin
+			fmt.Printf("  Using IRQ pin: %s (optional, may not be connected)\n", pinName)
+			break
+		}
+	}
+
+	if irqPin == nil {
+		fmt.Println("  Warning: Could not find IRQ pin, trying without IRQ support")
+		// Try with just RST pin using a different approach
+		return nil, fmt.Errorf("IRQ pin required but not found")
+	}
 
 	// Create MFRC522 device with SPI port and pins
 	dev, err := mfrc522.NewSPI(port, rstPin, irqPin, mfrc522.WithSync())
