@@ -192,27 +192,57 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 	}
 
 	// Set antenna gain for better detection
+	fmt.Println("  Setting antenna gain...")
 	if err := dev.SetAntennaGain(7); err != nil {
-		return nil, fmt.Errorf("failed to set antenna gain: %w", err)
+		fmt.Printf("  ⚠ Warning: Could not set antenna gain: %v\n", err)
+	} else {
+		fmt.Println("  ✓ Antenna gain set to maximum (7)")
 	}
 
 	reader := &MFRC522RFIDReader{
 		dev: dev,
 	}
 
-	// Test read to verify hardware is working
-	fmt.Println("  Testing card detection (hold card near reader for 3 seconds)...")
+	fmt.Println("  MFRC522 initialized - SPI communication OK ✓")
+
+	// Test read to verify card detection is working
+	fmt.Println("\n  === CARD DETECTION TEST ===")
+	fmt.Println("  Hold your RFID card/tag close to the reader NOW!")
+	fmt.Println("  Testing for 5 seconds...")
+	fmt.Println()
+
 	testStart := time.Now()
-	for time.Since(testStart) < 3*time.Second {
+	attempts := 0
+	for time.Since(testStart) < 5*time.Second {
+		attempts++
 		uid, err := dev.ReadUID(200 * time.Millisecond)
+
+		// Show progress every second
+		if attempts%5 == 1 {
+			elapsed := time.Since(testStart).Seconds()
+			fmt.Printf("  [%.0fs] Scanning... (%d attempts so far)\n", elapsed, attempts)
+		}
+
+		if err != nil && attempts%10 == 0 {
+			fmt.Printf("  [DEBUG] Error on attempt %d: %v\n", attempts, err)
+		}
+
 		if err == nil && len(uid) > 0 {
-			fmt.Printf("  ✓ Test successful! Detected card: %s\n", formatUID(uid))
+			fmt.Printf("\n  ✓✓✓ SUCCESS! Card detected: %s\n", formatUID(uid))
+			fmt.Println("  Your RFID reader is working correctly!")
 			return reader, nil
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	fmt.Println("  ⚠ No card detected during test (this is OK if no card was present)")
+	fmt.Printf("\n  ⚠ No card detected during %d attempts over 5 seconds\n", attempts)
+	fmt.Println("\n  TROUBLESHOOTING:")
+	fmt.Println("  1. Make sure your card is 13.56MHz (most contactless cards/tags)")
+	fmt.Println("  2. Hold card VERY close (within 1-2cm of antenna coil)")
+	fmt.Println("  3. Try different cards (credit card, hotel keycard, NFC tag)")
+	fmt.Println("  4. Check antenna connections TX1/TX2 and RX on MFRC522")
+	fmt.Println("  5. Verify 3.3V power supply is stable")
+	fmt.Println("\n  The system will continue - you can still test on payment screen")
 	return reader, nil
 }
 
