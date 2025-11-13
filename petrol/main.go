@@ -169,13 +169,22 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 		return nil, fmt.Errorf("failed to find RST pin (tried GPIO22, 22, BCM22, GPIO25, 25, BCM25)")
 	}
 
-	// Get an IRQ pin - we'll use GPIO24 even if not physically connected
-	// The library requires a valid pin, but polling mode doesn't actually use it
+	// Get an IRQ pin and configure it for interrupt detection
 	var irqPin gpio.PinIn
 	for _, pinName := range []string{"GPIO24", "24", "BCM24"} {
 		if pin := gpioreg.ByName(pinName); pin != nil {
 			irqPin = pin
-			fmt.Printf("  Using GPIO24 for IRQ (not physically required)\n")
+			fmt.Printf("  Found IRQ pin: %s\n", pinName)
+
+			// Configure pin for input with pull-up and falling edge detection
+			// MFRC522 pulls IRQ low when data is ready
+			if err := irqPin.In(gpio.PullUp, gpio.FallingEdge); err != nil {
+				fmt.Printf("  ⚠ Warning: Could not configure IRQ pin for interrupts: %v\n", err)
+				fmt.Println("  This may cause IRQ timeout errors")
+				fmt.Println("  Continuing anyway - system will fall back to keyboard mode if needed")
+			} else {
+				fmt.Println("  ✓ IRQ pin configured for falling edge detection with pull-up")
+			}
 			break
 		}
 	}
