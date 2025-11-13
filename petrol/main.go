@@ -194,14 +194,13 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 	}
 
 	// Create MFRC522 device with SPI port and pins
-	// Do NOT use WithSync() - that forces IRQ mode
-	// Without options, it should use pure polling
-	dev, err := mfrc522.NewSPI(port, rstPin, irqPin)
+	// Use WithSync() to enable interrupt-driven mode (now that IRQ is configured)
+	dev, err := mfrc522.NewSPI(port, rstPin, irqPin, mfrc522.WithSync())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MFRC522 device: %w", err)
 	}
 
-	fmt.Println("  Device created without sync mode (pure polling)")
+	fmt.Println("  ✓ Device created in interrupt mode (using IRQ for efficient detection)")
 
 	// Set antenna gain for better detection
 	fmt.Println("  Setting antenna gain...")
@@ -227,22 +226,32 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 	attempts := 0
 	hasIRQError := false
 
-	for time.Since(testStart) < 3*time.Second {
+	fmt.Println("  Using interrupt-driven detection (IRQ configured)")
+
+	for time.Since(testStart) < 5*time.Second {
 		attempts++
-		uid, err := dev.ReadUID(1 * time.Millisecond)
+		// Use longer timeout now that IRQ is configured - interrupts should respond quickly
+		uid, err := dev.ReadUID(500 * time.Millisecond)
 
 		// Check if we're getting IRQ timeout errors
 		if err != nil && strings.Contains(err.Error(), "irq") {
 			hasIRQError = true
+			fmt.Printf("  ✗ IRQ timeout on attempt %d (IRQ signal not working)\n", attempts)
 			break // Stop immediately if IRQ doesn't work
 		}
 
 		if err == nil && len(uid) > 0 {
 			fmt.Printf("\n  ✓✓✓ SUCCESS! Card detected: %s\n", formatUID(uid))
-			fmt.Println("  Your RFID reader is working correctly!")
+			fmt.Println("  Your RFID reader is working correctly with IRQ!")
 			return reader, nil
 		}
-		time.Sleep(20 * time.Millisecond)
+
+		// Show progress
+		if attempts%3 == 1 {
+			fmt.Printf("  ... scanning (attempt %d)\n", attempts)
+		}
+
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// If we got IRQ timeout errors, return error to trigger fallback
@@ -256,15 +265,15 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 }
 
 func (r *MFRC522RFIDReader) IsCardPresent() (bool, error) {
-	// Direct polling approach - don't use ReadUID which waits for IRQ
-	// Instead, try a low timeout read that won't wait for IRQ
-	uid, err := r.dev.ReadUID(1 * time.Millisecond)
+	// Interrupt-driven detection with reasonable timeout
+	// IRQ will signal when card is present, so we can wait a bit
+	uid, err := r.dev.ReadUID(300 * time.Millisecond)
 	if err != nil {
-		// Ignore timeout errors - they're expected when no card is present
+		// Ignore normal "no card" errors
 		errStr := err.Error()
 		if errStr != "timeout" && errStr != "no tag" &&
 			!strings.Contains(errStr, "timeout waiting for irq") {
-			// Only log unexpected errors occasionally
+			// Log unexpected errors occasionally
 			if time.Since(r.lastSeen) > 5*time.Second {
 				fmt.Printf("DEBUG: ReadUID error: %v\n", err)
 				r.lastSeen = time.Now() // Use this to limit debug spam
@@ -290,8 +299,8 @@ func (r *MFRC522RFIDReader) ReadCardID() (string, error) {
 		return r.lastCardID, nil
 	}
 
-	// Try to read card again with short timeout
-	uid, err := r.dev.ReadUID(50 * time.Millisecond)
+	// Try to read card again - use reasonable timeout for interrupt mode
+	uid, err := r.dev.ReadUID(300 * time.Millisecond)
 	if err != nil {
 		return "", fmt.Errorf("failed to read card: %w", err)
 	}
