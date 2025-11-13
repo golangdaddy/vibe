@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,9 +24,10 @@ const (
 	buttonPin = 17
 
 	// Pump settings
-	pricePerLitre  = 1.50                 // Currency per litre
-	incrementRate  = 0.0015               // Litres added per increment
-	updateInterval = 3 * time.Millisecond // How often to check button and update display
+	minPricePerLitre = 1.40                 // Minimum currency per litre
+	maxPricePerLitre = 1.60                 // Maximum currency per litre
+	incrementRate    = 0.0015               // Litres added per increment
+	updateInterval   = 3 * time.Millisecond // How often to check button and update display
 
 	// Splash screen settings
 	splashDuration = 3 * time.Second // How long to show splash screen
@@ -84,15 +86,26 @@ func (ct *customTheme) Font(style fyne.TextStyle) fyne.Resource {
 	return ct.Theme.Font(style)
 }
 
+// RFIDReader is an interface for RFID card readers
+type RFIDReader interface {
+	IsCardPresent() (bool, error)
+	ReadCardID() (string, error)
+}
+
 type PetrolPump struct {
 	litres           float64
 	amount           float64
+	pricePerLitre    float64
 	button           rpio.Pin
 	litresContainer  *fyne.Container
 	amountContainer  *fyne.Container
 	litresDigitTexts []*canvas.Text
 	amountDigitTexts []*canvas.Text
 	payButton        *PayButton
+	rateLabel        *canvas.Text
+	rfidReader       RFIDReader
+	rfidCheckTicker  *time.Ticker
+	onPaymentScreen  bool
 	isPumping        bool
 	window           fyne.Window
 	mainContent      *fyne.Container
@@ -107,16 +120,25 @@ type PayButton struct {
 	onTapped   func()
 }
 
+// generateRandomPrice returns a random price between min and max
+func generateRandomPrice() float64 {
+	// Generate random price between minPricePerLitre and maxPricePerLitre
+	// Round to 2 decimal places
+	randomPrice := minPricePerLitre + rand.Float64()*(maxPricePerLitre-minPricePerLitre)
+	return float64(int(randomPrice*100)) / 100
+}
+
 func NewPetrolPump() *PetrolPump {
 	return &PetrolPump{
-		litres: 0.0,
-		amount: 0.0,
+		litres:        0.0,
+		amount:        0.0,
+		pricePerLitre: generateRandomPrice(),
 	}
 }
 
 func (p *PetrolPump) increment() {
 	p.litres += incrementRate
-	p.amount = p.litres * pricePerLitre
+	p.amount = p.litres * p.pricePerLitre
 	p.isPumping = true
 	p.updateGUIDisplay()
 }
@@ -125,6 +147,13 @@ func (p *PetrolPump) reset() {
 	p.litres = 0.0
 	p.amount = 0.0
 	p.isPumping = false
+	// Generate new random price on reset
+	p.pricePerLitre = generateRandomPrice()
+	// Update rate label if it exists
+	if p.rateLabel != nil {
+		p.rateLabel.Text = fmt.Sprintf("£%.2f/L", p.pricePerLitre)
+		p.rateLabel.Refresh()
+	}
 	p.updateGUIDisplay()
 }
 
@@ -155,6 +184,9 @@ func (p *PetrolPump) updatePayButton() {
 }
 
 func (p *PetrolPump) showPaymentScreen() {
+	// Set flag that we're on payment screen
+	p.onPaymentScreen = true
+
 	// Create payment screen background
 	bg := canvas.NewRectangle(displayBg)
 
@@ -186,6 +218,8 @@ func (p *PetrolPump) showPaymentScreen() {
 
 	// Cancel button
 	cancelButton := widget.NewButton("Cancel", func() {
+		// Stop checking for RFID
+		p.onPaymentScreen = false
 		// Go back to main screen
 		mainBg := canvas.NewRectangle(displayBg)
 		p.window.SetContent(container.NewStack(mainBg, p.mainContent))
@@ -216,6 +250,114 @@ func (p *PetrolPump) showPaymentScreen() {
 	)
 
 	p.window.SetContent(container.NewStack(bg, content))
+}
+
+// handlePaymentSuccess shows a success screen and resets the pump
+func (p *PetrolPump) handlePaymentSuccess(cardUID string) {
+	// Stop checking for RFID
+	p.onPaymentScreen = false
+
+	// Create success screen
+	bg := canvas.NewRectangle(displayBg)
+
+	// Header with white background
+	headerBg := canvas.NewRectangle(color.White)
+	petrolLabel := canvas.NewText("PETROL", color.Black)
+	petrolLabel.TextSize = 50
+	petrolLabel.Alignment = fyne.TextAlignCenter
+
+	headerContent := container.NewCenter(petrolLabel)
+	header := container.NewStack(headerBg, container.NewPadded(headerContent))
+
+	// Success message
+	successText := canvas.NewText("✓ Payment Successful!", color.RGBA{R: 40, G: 200, B: 80, A: 255})
+	successText.TextSize = 70
+	successText.Alignment = fyne.TextAlignCenter
+	successText.TextStyle = fyne.TextStyle{Bold: true}
+
+	// Card info (optional)
+	cardText := canvas.NewText(fmt.Sprintf("Card: %s", cardUID), displayWhite)
+	cardText.TextSize = 30
+	cardText.Alignment = fyne.TextAlignCenter
+
+	// Amount paid
+	amountText := canvas.NewText(fmt.Sprintf("£%.2f", p.amount), displayWhite)
+	amountText.TextSize = 80
+	amountText.Alignment = fyne.TextAlignCenter
+
+	// Layout
+	content := container.NewBorder(
+		header, // Top
+		nil,    // Bottom
+		nil,    // Left
+		nil,    // Right
+		// Center
+		container.NewVBox(
+			layout.NewSpacer(),
+			container.NewCenter(successText),
+			layout.NewSpacer(),
+			container.NewCenter(amountText),
+			layout.NewSpacer(),
+			container.NewCenter(cardText),
+			layout.NewSpacer(),
+		),
+	)
+
+	p.window.SetContent(container.NewStack(bg, content))
+
+	// Return to main screen after 3 seconds and reset
+	go func() {
+		time.Sleep(3 * time.Second)
+		mainBg := canvas.NewRectangle(displayBg)
+		p.window.SetContent(container.NewStack(mainBg, p.mainContent))
+		time.Sleep(100 * time.Millisecond)
+		p.reset()
+	}()
+}
+
+// startRFIDMonitoring starts checking for RFID cards when on payment screen
+func (p *PetrolPump) startRFIDMonitoring() {
+	if p.rfidReader == nil {
+		fmt.Println("ℹ RFID reader not available - payments will be manual only")
+		return
+	}
+
+	// Check for RFID cards every 500ms
+	p.rfidCheckTicker = time.NewTicker(500 * time.Millisecond)
+	go func() {
+		for range p.rfidCheckTicker.C {
+			// Only check if we're on the payment screen
+			if !p.onPaymentScreen {
+				continue
+			}
+
+			// Check if a card is present
+			present, err := p.rfidReader.IsCardPresent()
+			if err != nil || !present {
+				continue
+			}
+
+			fmt.Println("✓ RFID card detected! Processing payment...")
+
+			// Read card ID
+			cardID := ""
+			if id, err := p.rfidReader.ReadCardID(); err == nil {
+				cardID = id
+			} else {
+				cardID = "Unknown"
+			}
+
+			fmt.Printf("  Card ID: %s\n", cardID)
+			fmt.Printf("  Amount: £%.2f\n", p.amount)
+			fmt.Printf("  Fuel: %.2f L @ £%.2f/L\n", p.litres, p.pricePerLitre)
+
+			// Handle payment success
+			p.handlePaymentSuccess(cardID)
+
+			// Small delay to prevent multiple reads
+			time.Sleep(2 * time.Second)
+		}
+	}()
 }
 
 // NewPayButton creates a new Bootstrap-style touchscreen-friendly pay button
@@ -364,10 +506,10 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	petrolLabel.TextStyle = fyne.TextStyle{Bold: false}
 
 	// Rate label for header (black text)
-	rateLabel := canvas.NewText(fmt.Sprintf("£%.2f/L", pricePerLitre), color.Black)
-	rateLabel.TextSize = 30
-	rateLabel.Alignment = fyne.TextAlignCenter
-	rateLabel.TextStyle = fyne.TextStyle{Bold: false}
+	p.rateLabel = canvas.NewText(fmt.Sprintf("£%.2f/L", p.pricePerLitre), color.Black)
+	p.rateLabel.TextSize = 30
+	p.rateLabel.Alignment = fyne.TextAlignCenter
+	p.rateLabel.TextStyle = fyne.TextStyle{Bold: false}
 
 	// Debug mode indicator (if in debug mode)
 	var modeIndicator *canvas.Text
@@ -386,7 +528,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 		headerContent = container.NewBorder(
 			nil, nil,
 			petrolLabel,                        // Left
-			rateLabel,                          // Right
+			p.rateLabel,                        // Right
 			container.NewCenter(modeIndicator), // Center
 		)
 	} else {
@@ -394,7 +536,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 		headerContent = container.NewBorder(
 			nil, nil,
 			petrolLabel, // Left
-			rateLabel,   // Right
+			p.rateLabel, // Right
 			nil,         // Center (empty)
 		)
 	}
@@ -867,6 +1009,10 @@ func loadBaseFont() {
 
 func main() {
 	var button rpio.Pin
+	var rfidReader RFIDReader
+
+	// Seed random number generator for price randomization
+	rand.Seed(time.Now().UnixNano())
 
 	// Load fonts if available
 	loadDigitalFont()
@@ -901,13 +1047,33 @@ func main() {
 		time.Sleep(1 * time.Second)
 	}
 
+	// Try to initialize RFID reader
+	rfidReader = initRFIDReader()
+
 	// Run graphical mode
-	runGraphicalMode(button)
+	runGraphicalMode(button, rfidReader)
 }
 
-func runGraphicalMode(button rpio.Pin) {
+// initRFIDReader tries to initialize the MFRC522 RFID reader
+// Returns nil if reader cannot be initialized
+func initRFIDReader() RFIDReader {
+	fmt.Println("\nInitializing RFID reader...")
+
+	// TODO: Implement actual RFID reader initialization
+	// This is a placeholder that you can replace with actual MFRC522 code
+	// Example implementation would go here using SPI communication
+
+	fmt.Println("⚠ RFID reader initialization not yet implemented")
+	fmt.Println("  To add RFID support, implement the RFIDReader interface")
+	fmt.Println("  Payment screen will still work in manual mode")
+
+	return nil
+}
+
+func runGraphicalMode(button rpio.Pin, rfidReader RFIDReader) {
 	pump := NewPetrolPump()
 	pump.button = button
+	pump.rfidReader = rfidReader
 
 	// Create GUI application
 	myApp := app.New()
@@ -933,6 +1099,9 @@ func runGraphicalMode(button rpio.Pin) {
 
 		// Start pump monitoring
 		startPumpMonitoring(pump, button)
+
+		// Start RFID monitoring if reader is available
+		pump.startRFIDMonitoring()
 	}()
 
 	myApp.Run()
