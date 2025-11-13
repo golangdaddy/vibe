@@ -1315,32 +1315,53 @@ func main() {
 func initRFIDReader() RFIDReader {
 	fmt.Println("\nInitializing RFID reader...")
 
-	// Try to initialize real MFRC522 hardware first
-	reader, err := NewMFRC522RFIDReader()
+	// Try gobot MFRC522 driver first (uses SPI polling, no GPIO IRQ needed!)
+	fmt.Println("  Attempting gobot MFRC522 driver (SPI polling mode)...")
+	gobotReader, err := NewGobotRFIDReader()
 	if err == nil {
-		fmt.Println("✓ MFRC522 RFID reader initialized successfully")
-		fmt.Println("  Hardware ready - tap your card on the reader to pay")
-		return reader
+		fmt.Println("✓ Gobot MFRC522 RFID reader initialized successfully!")
+		fmt.Println("  ✓ Using SPI interrupt polling (no GPIO IRQ required)")
+		fmt.Println("  ✓ Hardware ready - tap your card on the reader to pay")
+		return gobotReader
 	}
+	fmt.Printf("  ⚠ Gobot initialization failed: %v\n", err)
+
+	// Fallback: Try periph.io MFRC522 hardware (requires GPIO IRQ)
+	fmt.Println("  Attempting periph.io MFRC522 driver (requires GPIO IRQ)...")
+	periphReader, err := NewMFRC522RFIDReader()
+	if err == nil {
+		fmt.Println("✓ periph.io MFRC522 RFID reader initialized successfully")
+		fmt.Println("  Hardware ready - tap your card on the reader to pay")
+		return periphReader
+	}
+	fmt.Printf("  ⚠ periph.io initialization failed: %v\n", err)
 
 	// Real hardware not available - use mock for testing
-	fmt.Printf("⚠ RFID hardware issue: %v\n", err)
-	fmt.Println("\n╔════════════════════════════════════════════════════════════╗")
-	fmt.Println("║  RFID READER FALLBACK MODE                                ║")
-	fmt.Println("╠════════════════════════════════════════════════════════════╣")
-	fmt.Println("║  The periph.io library requires a working IRQ connection  ║")
-	fmt.Println("║  for the MFRC522 to function.                             ║")
-	fmt.Println("║                                                            ║")
-	fmt.Println("║  WORKAROUND: Using keyboard simulation instead            ║")
-	fmt.Println("║  • Press P on payment screen = tap RFID card              ║")
-	fmt.Println("║  • Works identically to real hardware                     ║")
-	fmt.Println("║  • Generates random card IDs                              ║")
-	fmt.Println("║  • Processes payment automatically                        ║")
-	fmt.Println("║  • Resets pump with new price                             ║")
-	fmt.Println("║                                                            ║")
-	fmt.Println("║  TO FIX: Connect MFRC522 IRQ → GPIO24 (Pin 18)           ║")
-	fmt.Println("║  Or try a different RFID library that supports polling    ║")
-	fmt.Println("╚════════════════════════════════════════════════════════════╝")
+	fmt.Println("\n╔═══════════════════════════════════════════════════════════════╗")
+	fmt.Println("║              RFID KEYBOARD SIMULATION MODE                    ║")
+	fmt.Println("╠═══════════════════════════════════════════════════════════════╣")
+	fmt.Println("║  Hardware RFID not available                                 ║")
+	fmt.Println("║  Possible causes:                                            ║")
+	fmt.Println("║  - SPI not enabled (run: sudo raspi-config)                  ║")
+	fmt.Println("║  - RFID reader not connected to SPI pins                     ║")
+	fmt.Println("║  - Permissions issue (try: sudo usermod -aG spi $USER)       ║")
+	fmt.Println("║                                                               ║")
+	fmt.Println("║  ✓ SOLUTION: Keyboard simulation (works perfectly!)          ║")
+	fmt.Println("║                                                               ║")
+	fmt.Println("║  HOW TO USE:                                                  ║")
+	fmt.Println("║  1. Pump fuel (hold button or SPACE key)                     ║")
+	fmt.Println("║  2. Click PAY button on screen                               ║")
+	fmt.Println("║  3. Press 'P' key = tap RFID card                            ║")
+	fmt.Println("║  4. Payment processes automatically!                         ║")
+	fmt.Println("║  5. Pump resets with new random price                        ║")
+	fmt.Println("║                                                               ║")
+	fmt.Println("║  FEATURES (identical to real RFID):                          ║")
+	fmt.Println("║  ✓ Generates realistic card IDs (A3:B2:C1:D0)               ║")
+	fmt.Println("║  ✓ Shows success screen with card info                      ║")
+	fmt.Println("║  ✓ Auto-resets pump to 0.00                                 ║")
+	fmt.Println("║  ✓ Generates new price (£1.40-£1.60)                        ║")
+	fmt.Println("║  ✓ Perfect for demos & testing!                             ║")
+	fmt.Println("╚═══════════════════════════════════════════════════════════════╝")
 	fmt.Println()
 
 	return &MockRFIDReader{}
