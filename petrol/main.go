@@ -202,10 +202,10 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 }
 
 func (r *MFRC522RFIDReader) IsCardPresent() (bool, error) {
-	// Try to detect a card
-	uid, err := r.dev.ReadUID(100 * time.Millisecond)
+	// Try to detect a card with longer timeout
+	uid, err := r.dev.ReadUID(500 * time.Millisecond)
 	if err != nil {
-		// No card present or read error
+		// No card present or read error (this is normal when no card)
 		return false, nil
 	}
 
@@ -213,6 +213,7 @@ func (r *MFRC522RFIDReader) IsCardPresent() (bool, error) {
 		// Card detected - store the ID
 		r.lastCardID = formatUID(uid)
 		r.lastSeen = time.Now()
+		fmt.Printf("DEBUG: Card detected, UID length: %d bytes\n", len(uid))
 		return true, nil
 	}
 
@@ -481,8 +482,11 @@ func (p *PetrolPump) startRFIDMonitoring() {
 		return
 	}
 
+	fmt.Println("✓ RFID monitoring started - checking for cards every 500ms")
+
 	// Check for RFID cards every 500ms
 	p.rfidCheckTicker = time.NewTicker(500 * time.Millisecond)
+	checkCount := 0
 	go func() {
 		for range p.rfidCheckTicker.C {
 			// Only check if we're on the payment screen
@@ -490,9 +494,19 @@ func (p *PetrolPump) startRFIDMonitoring() {
 				continue
 			}
 
+			checkCount++
+			if checkCount%10 == 0 {
+				fmt.Printf("DEBUG: Checking for card... (check #%d)\n", checkCount)
+			}
+
 			// Check if a card is present
 			present, err := p.rfidReader.IsCardPresent()
-			if err != nil || !present {
+			if err != nil {
+				fmt.Printf("DEBUG: Error checking card: %v\n", err)
+				continue
+			}
+
+			if !present {
 				continue
 			}
 
@@ -504,6 +518,7 @@ func (p *PetrolPump) startRFIDMonitoring() {
 				cardID = id
 			} else {
 				cardID = "Unknown"
+				fmt.Printf("DEBUG: Error reading card ID: %v\n", err)
 			}
 
 			fmt.Printf("  Card ID: %s\n", cardID)
@@ -513,7 +528,8 @@ func (p *PetrolPump) startRFIDMonitoring() {
 			// Handle payment success
 			p.handlePaymentSuccess(cardID)
 
-			// Small delay to prevent multiple reads
+			// Reset check count and delay to prevent multiple reads
+			checkCount = 0
 			time.Sleep(2 * time.Second)
 		}
 	}()
