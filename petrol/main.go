@@ -216,23 +216,16 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 
 	testStart := time.Now()
 	attempts := 0
-	fmt.Println("  NOTE: IRQ timeouts are expected and will be ignored")
-	for time.Since(testStart) < 5*time.Second {
+	hasIRQError := false
+
+	for time.Since(testStart) < 3*time.Second {
 		attempts++
-		// Use 1ms timeout - we don't care about IRQ timeouts
 		uid, err := dev.ReadUID(1 * time.Millisecond)
 
-		// Show progress every second
-		if attempts%50 == 1 {
-			elapsed := time.Since(testStart).Seconds()
-			fmt.Printf("  [%.0fs] Scanning... (%d attempts so far)\n", elapsed, attempts)
-		}
-
-		// Ignore IRQ timeout errors completely
-		if err != nil && !strings.Contains(err.Error(), "irq") {
-			if attempts%100 == 0 {
-				fmt.Printf("  [DEBUG] Non-IRQ error on attempt %d: %v\n", attempts, err)
-			}
+		// Check if we're getting IRQ timeout errors
+		if err != nil && strings.Contains(err.Error(), "irq") {
+			hasIRQError = true
+			break // Stop immediately if IRQ doesn't work
 		}
 
 		if err == nil && len(uid) > 0 {
@@ -243,14 +236,13 @@ func NewMFRC522RFIDReader() (*MFRC522RFIDReader, error) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	fmt.Printf("\n  ⚠ No card detected during %d attempts over 5 seconds\n", attempts)
-	fmt.Println("\n  TROUBLESHOOTING:")
-	fmt.Println("  1. Make sure your card is 13.56MHz (most contactless cards/tags)")
-	fmt.Println("  2. Hold card VERY close (within 1-2cm of antenna coil)")
-	fmt.Println("  3. Try different cards (credit card, hotel keycard, NFC tag)")
-	fmt.Println("  4. Check antenna connections TX1/TX2 and RX on MFRC522")
-	fmt.Println("  5. Verify 3.3V power supply is stable")
-	fmt.Println("\n  The system will continue - you can still test on payment screen")
+	// If we got IRQ timeout errors, return error to trigger fallback
+	if hasIRQError {
+		return nil, fmt.Errorf("IRQ timeout - periph.io library requires working IRQ signal")
+	}
+
+	fmt.Printf("\n  ⚠ No card detected during test\n")
+	fmt.Println("  The system will continue - reader may work during actual use")
 	return reader, nil
 }
 
@@ -1315,11 +1307,23 @@ func initRFIDReader() RFIDReader {
 
 	// Real hardware not available - use mock for testing
 	fmt.Printf("⚠ RFID hardware issue: %v\n", err)
-	fmt.Println("\n  The MFRC522 hardware has IRQ timeout issues.")
-	fmt.Println("  Falling back to keyboard simulation mode.")
-	fmt.Println("\n✓ Mock RFID reader initialized")
-	fmt.Println("  Press P on payment screen to simulate card tap")
-	fmt.Println("  (This works the same as a real card - payment will process)")
+	fmt.Println("\n╔════════════════════════════════════════════════════════════╗")
+	fmt.Println("║  RFID READER FALLBACK MODE                                ║")
+	fmt.Println("╠════════════════════════════════════════════════════════════╣")
+	fmt.Println("║  The periph.io library requires a working IRQ connection  ║")
+	fmt.Println("║  for the MFRC522 to function.                             ║")
+	fmt.Println("║                                                            ║")
+	fmt.Println("║  WORKAROUND: Using keyboard simulation instead            ║")
+	fmt.Println("║  • Press P on payment screen = tap RFID card              ║")
+	fmt.Println("║  • Works identically to real hardware                     ║")
+	fmt.Println("║  • Generates random card IDs                              ║")
+	fmt.Println("║  • Processes payment automatically                        ║")
+	fmt.Println("║  • Resets pump with new price                             ║")
+	fmt.Println("║                                                            ║")
+	fmt.Println("║  TO FIX: Connect MFRC522 IRQ → GPIO24 (Pin 18)           ║")
+	fmt.Println("║  Or try a different RFID library that supports polling    ║")
+	fmt.Println("╚════════════════════════════════════════════════════════════╝")
+	fmt.Println()
 
 	return &MockRFIDReader{}
 }
