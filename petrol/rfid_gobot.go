@@ -36,13 +36,37 @@ func NewGobotRFIDReader() (*GobotRFIDReader, error) {
 	
 	// Start the robot (initializes hardware)
 	// This will call driver.initialize() via afterStart callback
+	// The robot.Start() will:
+	// 1. Start connections (adaptor)
+	// 2. Start devices (driver) - which calls driver.Start()
+	// 3. Driver.Start() calls GetSpiConnection() which needs the adaptor to be connected
 	if err := robot.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start RFID reader: %w", err)
 	}
 	
 	// Give the driver a moment to fully initialize
 	// The afterStart callback sets up the connection wrapper
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
+	
+	// Verify the driver is actually working by trying a simple operation
+	// This will catch any initialization issues early
+	// Use panic recovery to catch SPI connection issues
+	initOK := true
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("⚠ Gobot SPI connection panic during init: %v\n", r)
+				initOK = false
+			}
+		}()
+		// Try to check for card - this will trigger SPI connection setup
+		_ = driver.IsCardPresent()
+	}()
+	
+	if !initOK {
+		robot.Stop()
+		return nil, fmt.Errorf("SPI connection failed - gobot adaptor not properly initialized")
+	}
 	
 	reader := &GobotRFIDReader{
 		adaptor: adaptor,
@@ -56,6 +80,11 @@ func NewGobotRFIDReader() (*GobotRFIDReader, error) {
 // IsCardPresent checks if an RFID card is present
 // Uses gobot's SPI polling of interrupt registers (no GPIO IRQ needed)
 func (g *GobotRFIDReader) IsCardPresent() (bool, error) {
+	// Safety check - ensure driver is initialized
+	if g.driver == nil {
+		return false, fmt.Errorf("driver not initialized")
+	}
+	
 	// IsCardPresent returns error if no card is detected
 	err := g.driver.IsCardPresent()
 	if err != nil {
@@ -64,9 +93,11 @@ func (g *GobotRFIDReader) IsCardPresent() (bool, error) {
 	}
 	
 	// Card detected - try to read UID to confirm
+	// But don't fail if UID read fails - card might have moved
 	uid, err := g.readUID()
 	if err != nil {
-		// Card might have moved away
+		// Card might have moved away or read failed
+		// Return false but don't treat as error
 		return false, nil
 	}
 	
@@ -105,37 +136,30 @@ func (g *GobotRFIDReader) ReadCardID() (string, error) {
 // This is necessary because gobot doesn't expose a direct UID reading method
 // NOTE: gobot uses SPI polling of interrupt registers (no GPIO IRQ pin needed)
 func (g *GobotRFIDReader) readUID() ([]byte, error) {
+	// Safety check
+	if g.driver == nil {
+		return nil, fmt.Errorf("driver is nil")
+	}
+	if g.driver.MFRC522Common == nil {
+		return nil, fmt.Errorf("MFRC522Common is nil - driver not initialized")
+	}
+	
 	// Use reflection to access the unexported piccActivate method
 	// The MFRC522Common is embedded as a pointer in MFRC522Driver
-	driverValue := reflect.ValueOf(g.driver).Elem()
-	commonField := driverValue.FieldByName("MFRC522Common")
-	if !commonField.IsValid() {
-		return nil, fmt.Errorf("could not access MFRC522Common field")
-	}
-	
-	// MFRC522Common is a pointer, so we need to get the value it points to
-	var commonValue reflect.Value
-	if commonField.Kind() == reflect.Ptr {
-		if commonField.IsNil() {
-			return nil, fmt.Errorf("MFRC522Common is nil - driver not initialized")
-		}
-		commonValue = commonField.Elem()
-	} else {
-		commonValue = commonField
-	}
-	
-	// Get the piccActivate method (it's on the pointer receiver)
-	// Try pointer method first
+	// Get the method directly from the embedded pointer
 	method := reflect.ValueOf(g.driver.MFRC522Common).MethodByName("piccActivate")
 	if !method.IsValid() {
-		// Try on the value
-		method = commonValue.MethodByName("piccActivate")
-		if !method.IsValid() {
-			return nil, fmt.Errorf("piccActivate method not found")
-		}
+		return nil, fmt.Errorf("piccActivate method not found - driver may not be initialized")
 	}
 	
 	// Call piccActivate() which returns ([]byte, error)
+	// Use defer/recover to catch any panics from SPI access
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("PANIC in readUID: %v\n", r)
+		}
+	}()
+	
 	results := method.Call(nil)
 	if len(results) != 2 {
 		return nil, fmt.Errorf("unexpected return values from piccActivate: got %d, expected 2", len(results))

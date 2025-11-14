@@ -572,8 +572,22 @@ func (p *PetrolPump) startRFIDMonitoring() {
 				fmt.Printf("DEBUG: Checking for card... (check #%d)\n", checkCount)
 			}
 
-			// Check if a card is present
-			present, err := p.rfidReader.IsCardPresent()
+			// Check if a card is present with panic recovery
+			var present bool
+			var err error
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						fmt.Printf("⚠ PANIC in IsCardPresent: %v\n", r)
+						fmt.Println("  → RFID reader may not be properly initialized")
+						fmt.Println("  → Falling back to keyboard mode (press P to pay)")
+						err = fmt.Errorf("panic in IsCardPresent: %v", r)
+						present = false
+					}
+				}()
+				present, err = p.rfidReader.IsCardPresent()
+			}()
+
 			if err != nil {
 				fmt.Printf("DEBUG: Error checking card: %v\n", err)
 				continue
@@ -585,14 +599,22 @@ func (p *PetrolPump) startRFIDMonitoring() {
 
 			fmt.Println("✓ RFID card detected! Processing payment...")
 
-			// Read card ID
+			// Read card ID with panic recovery
 			cardID := ""
-			if id, err := p.rfidReader.ReadCardID(); err == nil {
-				cardID = id
-			} else {
-				cardID = "Unknown"
-				fmt.Printf("DEBUG: Error reading card ID: %v\n", err)
-			}
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						fmt.Printf("⚠ PANIC in ReadCardID: %v\n", r)
+						cardID = "Unknown"
+					}
+				}()
+				if id, readErr := p.rfidReader.ReadCardID(); readErr == nil {
+					cardID = id
+				} else {
+					cardID = "Unknown"
+					fmt.Printf("DEBUG: Error reading card ID: %v\n", readErr)
+				}
+			}()
 
 			fmt.Printf("  Card ID: %s\n", cardID)
 			fmt.Printf("  Amount: £%.2f\n", p.amount)
