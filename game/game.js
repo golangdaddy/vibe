@@ -155,8 +155,8 @@ function update() {
     if (currentMilestoneLevel > lastMilestoneLevel && score > 0) {
         lastMilestoneLevel = currentMilestoneLevel;
         
-        // Reduce spawn interval by 15% each milestone (exponential increase)
-        spawnInterval = Math.floor(spawnInterval * 0.85);
+        // Reduce spawn interval by 12% each milestone (exponential increase)
+        spawnInterval = Math.floor(spawnInterval * 0.88);
         // Ensure spawn interval doesn't go below 1 frame
         if (spawnInterval < 1) {
             spawnInterval = 1;
@@ -306,7 +306,8 @@ function update() {
     // Update traffic cars
     for (let i = trafficCars.length - 1; i >= 0; i--) {
         const car = trafficCars[i];
-        car.y += trafficSpeed;
+        // Apply individual speed multiplier for variation
+        car.y += trafficSpeed * car.speedMultiplier;
         
         // Check if player has passed the car's center
         if (!car.passed) {
@@ -361,12 +362,16 @@ function spawnTrafficCar() {
     
     // Spawn car if lane is clear, otherwise skip this spawn attempt
     if (!tooClose) {
+        // Each car has a random speed variation of ±3%
+        const speedVariation = 0.97 + Math.random() * 0.06; // Random between 0.97 and 1.03
+        
         const car = {
             x: lane - 20,
             y: -80,
             width: 40,
             height: 70,
             color: colors[Math.floor(Math.random() * colors.length)],
+            speedMultiplier: speedVariation, // ±3% speed variation
             passed: false // Track if player has passed this car
         };
         trafficCars.push(car);
@@ -375,19 +380,23 @@ function spawnTrafficCar() {
 
 function checkCollision(rect1, rect2) {
     // Collision box is much smaller than sprite for very forgiving gameplay
-    // Cars are 40x70px, so 3px padding = ~15% width reduction, ~9% height reduction
-    const padding = 3; // 3px on each side = 6px total reduction per dimension
+    // Cars are 40x70px
+    // More padding on back (top) of cars for easier passing from behind
+    const paddingLeft = 3;
+    const paddingRight = 3;
+    const paddingTop = 8; // More padding on back (top) - cars driving down
+    const paddingBottom = 3; // Less padding on front (bottom)
     
     // Calculate effective collision box (smaller than sprite)
-    const rect1Left = rect1.x + padding;
-    const rect1Right = rect1.x + rect1.width - padding;
-    const rect1Top = rect1.y + padding;
-    const rect1Bottom = rect1.y + rect1.height - padding;
+    const rect1Left = rect1.x + paddingLeft;
+    const rect1Right = rect1.x + rect1.width - paddingRight;
+    const rect1Top = rect1.y + paddingTop;
+    const rect1Bottom = rect1.y + rect1.height - paddingBottom;
     
-    const rect2Left = rect2.x + padding;
-    const rect2Right = rect2.x + rect2.width - padding;
-    const rect2Top = rect2.y + padding;
-    const rect2Bottom = rect2.y + rect2.height - padding;
+    const rect2Left = rect2.x + paddingLeft;
+    const rect2Right = rect2.x + rect2.width - paddingRight;
+    const rect2Top = rect2.y + paddingTop;
+    const rect2Bottom = rect2.y + rect2.height - paddingBottom;
     
     // Check if collision boxes overlap
     return rect1Left < rect2Right &&
