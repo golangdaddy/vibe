@@ -765,10 +765,7 @@ func (r *payButtonRenderer) Destroy() {}
 
 func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	w := a.NewWindow("Petrol Pump Display")
-	// Set explicit size for 1024x600 display
-	w.Resize(fyne.NewSize(1024, 600))
-	w.SetFixedSize(true)
-	w.CenterOnScreen()
+	w.SetFullScreen(true)
 
 	// Create background - full 1024x600
 	bg := canvas.NewRectangle(displayBg)
