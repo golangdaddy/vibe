@@ -20,7 +20,11 @@ const player = {
     y: canvas.height - 120,
     width: 40,
     height: 70,
-    speed: 5,
+    maxSpeed: 5,
+    acceleration: 0.3,
+    friction: 0.85,
+    velocityX: 0,
+    velocityY: 0,
     color: '#FF0000'
 };
 
@@ -107,6 +111,8 @@ function startGame() {
     calculateLanes();
     player.x = canvas.width / 2 - 20;
     player.y = canvas.height - 120;
+    player.velocityX = 0;
+    player.velocityY = 0;
 }
 
 function restartGame() {
@@ -193,21 +199,76 @@ function update() {
         nextLaneMilestone = 999999;
     }
     
-    // Player movement
-    // Allow hard shoulder when available, otherwise minimum x is hard shoulder width
-    const minX = hardShoulderAvailable ? 0 : HARD_SHOULDER_WIDTH;
-    if ((keys['a'] || keys['arrowleft']) && player.x > minX) {
-        player.x -= player.speed;
+    // Player movement with acceleration
+    // Apply acceleration based on input
+    if (keys['a'] || keys['arrowleft']) {
+        player.velocityX -= player.acceleration;
     }
-    if ((keys['d'] || keys['arrowright']) && player.x < canvas.width - player.width - 10) {
-        player.x += player.speed;
+    if (keys['d'] || keys['arrowright']) {
+        player.velocityX += player.acceleration;
     }
-    if ((keys['w'] || keys['arrowup']) && player.y > 50) {
-        player.y -= player.speed;
+    if (keys['w'] || keys['arrowup']) {
+        player.velocityY -= player.acceleration;
     }
-    if ((keys['s'] || keys['arrowdown']) && player.y < canvas.height - player.height - 10) {
-        player.y += player.speed;
+    if (keys['s'] || keys['arrowdown']) {
+        player.velocityY += player.acceleration;
     }
+    
+    // Apply friction when no input (deceleration)
+    if (!(keys['a'] || keys['arrowleft'] || keys['d'] || keys['arrowright'])) {
+        player.velocityX *= player.friction;
+    }
+    if (!(keys['w'] || keys['arrowup'] || keys['s'] || keys['arrowdown'])) {
+        player.velocityY *= player.friction;
+    }
+    
+    // Clamp velocity to max speed
+    const currentSpeed = Math.sqrt(player.velocityX * player.velocityX + player.velocityY * player.velocityY);
+    if (currentSpeed > player.maxSpeed) {
+        const ratio = player.maxSpeed / currentSpeed;
+        player.velocityX *= ratio;
+        player.velocityY *= ratio;
+    }
+    
+    // Apply velocity to position
+    const newX = player.x + player.velocityX;
+    const newY = player.y + player.velocityY;
+    
+    // Check boundaries and update position
+    // Allow movement out of hard shoulder even when closed, but prevent entering it when closed
+    let canMoveX = true;
+    
+    if (hardShoulderAvailable) {
+        // Hard shoulder is open - can move anywhere
+        canMoveX = newX >= 0 && newX <= canvas.width - player.width - 10;
+    } else {
+        // Hard shoulder is closed
+        if (player.x < HARD_SHOULDER_WIDTH) {
+            // Player is already in hard shoulder - allow movement to exit (move right)
+            canMoveX = newX >= 0 && newX <= canvas.width - player.width - 10;
+        } else {
+            // Player is outside hard shoulder - prevent entering it
+            canMoveX = newX >= HARD_SHOULDER_WIDTH && newX <= canvas.width - player.width - 10;
+        }
+    }
+    
+    if (canMoveX) {
+        player.x = newX;
+    } else {
+        // Stop velocity when hitting boundary
+        player.velocityX = 0;
+    }
+    
+    if (newY >= 50 && newY <= canvas.height - player.height - 10) {
+        player.y = newY;
+    } else {
+        // Stop velocity when hitting boundary
+        player.velocityY = 0;
+    }
+    
+    // Stop very small velocities (prevent jitter)
+    if (Math.abs(player.velocityX) < 0.1) player.velocityX = 0;
+    if (Math.abs(player.velocityY) < 0.1) player.velocityY = 0;
     
     // Check if player is on hard shoulder when not available
     const onHardShoulder = player.x < HARD_SHOULDER_WIDTH;
@@ -287,22 +348,6 @@ function update() {
     // Update UI
     document.getElementById('score').textContent = score;
     document.getElementById('speed').textContent = Math.floor(trafficSpeed * 20);
-    
-    // Update hard shoulder status
-    const hardShoulderStatusEl = document.getElementById('hardShoulderStatus');
-    const hardShoulderTextEl = document.getElementById('hardShoulderText');
-    if (gameStarted) {
-        hardShoulderStatusEl.style.display = 'block';
-        if (hardShoulderAvailable) {
-            hardShoulderTextEl.textContent = 'OPEN';
-            hardShoulderTextEl.style.color = '#00FF00';
-        } else {
-            hardShoulderTextEl.textContent = 'CLOSED';
-            hardShoulderTextEl.style.color = '#FF0000';
-        }
-    } else {
-        hardShoulderStatusEl.style.display = 'none';
-    }
 }
 
 function spawnTrafficCar() {
