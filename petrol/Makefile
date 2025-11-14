@@ -1,4 +1,4 @@
-.PHONY: all build run install-base-font install-font setup-fontconfig clean help test-font
+.PHONY: all build run install-base-font install-font setup-fontconfig setup-spi clean help test-font
 
 # Default target
 all: install-base-font install-font build
@@ -49,15 +49,25 @@ install-font:
 setup-fontconfig:
 	@./setup-font.sh
 
-# Full setup: install fonts, configure system, and build
-setup: install-base-font install-font setup-fontconfig build
+# Setup SPI permissions for RFID reader (Raspberry Pi only)
+setup-spi:
+	@echo "Setting up SPI permissions for RFID reader..."
+	@./fix_spi.sh
+
+# Full setup: install fonts, configure system, setup SPI, and build
+setup: install-base-font install-font setup-fontconfig setup-spi build
 	@echo ""
 	@echo "==================================="
 	@echo "✓ Setup complete!"
 	@echo "==================================="
 	@echo ""
-	@echo "Run the petrol pump with: make run"
-	@echo "Or directly with:         ./petrol-pump"
+	@echo "⚠ If SPI was just enabled, you may need to REBOOT"
+	@echo "⚠ If you were added to spi group, LOGOUT and LOGIN"
+	@echo ""
+	@echo "After reboot/login, run the petrol pump with:"
+	@echo "  make run"
+	@echo "Or directly with:"
+	@echo "  ./petrol-pump"
 
 # Test if DSEG font is properly configured
 test-font:
@@ -105,12 +115,13 @@ help:
 	@echo ""
 	@echo "Usage:"
 	@echo "  make              - Install fonts and build program"
-	@echo "  make setup        - Full setup (fonts + fontconfig + build)"
+	@echo "  make setup        - Full setup (fonts + fontconfig + SPI + build)"
 	@echo "  make build        - Build the program"
 	@echo "  make run          - Build and run the program"
 	@echo "  make install-base-font - Install Modern Vision font"
 	@echo "  make install-font - Install DSEG7 font to project"
 	@echo "  make setup-fontconfig - Configure system to use DSEG7"
+	@echo "  make setup-spi    - Setup SPI permissions for RFID reader (Pi only)"
 	@echo "  make test-font    - Test font configuration"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make clean-all    - Remove build artifacts and fonts"
