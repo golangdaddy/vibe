@@ -696,7 +696,7 @@ func (pb *PayButton) CreateRenderer() fyne.WidgetRenderer {
 
 // Implement fyne.Widget interface methods
 func (pb *PayButton) Size() fyne.Size {
-	return fyne.NewSize(480, 90)
+	return fyne.NewSize(200, 70) // Smaller button for 1024x600 footer
 }
 
 func (pb *PayButton) Resize(size fyne.Size) {}
@@ -708,7 +708,7 @@ func (pb *PayButton) Position() fyne.Position {
 func (pb *PayButton) Move(pos fyne.Position) {}
 
 func (pb *PayButton) MinSize() fyne.Size {
-	return fyne.NewSize(360, 70)
+	return fyne.NewSize(200, 70) // Smaller button for 1024x600 footer
 }
 
 func (pb *PayButton) Visible() bool {
@@ -747,8 +747,8 @@ func (r *payButtonRenderer) Layout(size fyne.Size) {
 }
 
 func (r *payButtonRenderer) MinSize() fyne.Size {
-	// Bootstrap-like button size - larger for touchscreen
-	return fyne.NewSize(480, 90)
+	// Button size optimized for 1024x600 footer
+	return fyne.NewSize(200, 70)
 }
 
 func (r *payButtonRenderer) Refresh() {
@@ -765,10 +765,14 @@ func (r *payButtonRenderer) Destroy() {}
 
 func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	w := a.NewWindow("Petrol Pump Display")
-	w.SetFullScreen(true)
+	// Set explicit size for 1024x600 display
+	w.Resize(fyne.NewSize(1024, 600))
+	w.SetFixedSize(true)
+	w.CenterOnScreen()
 
-	// Create background
+	// Create background - full 1024x600
 	bg := canvas.NewRectangle(displayBg)
+	bg.SetMinSize(fyne.NewSize(1024, 600))
 
 	// Header labels (black text for white header background)
 	petrolLabel := canvas.NewText("PETROL", color.Black)
@@ -791,30 +795,29 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 		modeIndicator.TextStyle = fyne.TextStyle{Bold: true}
 	}
 
-	// Create header with white background
+	// Create header with white background - fixed height for 1024x600
 	headerBg := canvas.NewRectangle(color.White)
+	headerBg.SetMinSize(fyne.NewSize(1024, 80))
+
 	var headerContent fyne.CanvasObject
 	if debugMode {
 		// Header with PETROL (left), DEBUG MODE (center), rate (right)
-		headerSpacer1 := layout.NewSpacer()
-		headerSpacer2 := layout.NewSpacer()
-		headerContent = container.NewHBox(
-			petrolLabel,                        // Left
-			headerSpacer1,                      // Spacer
-			container.NewCenter(modeIndicator), // Center
-			headerSpacer2,                      // Spacer
-			p.rateLabel,                        // Right
+		headerContent = container.NewBorder(
+			nil, nil,
+			container.NewPadded(petrolLabel),                        // Left with padding
+			container.NewPadded(p.rateLabel),                        // Right with padding
+			container.NewCenter(container.NewPadded(modeIndicator)), // Center
 		)
 	} else {
 		// Header with PETROL (left), rate (right)
-		headerSpacer := layout.NewSpacer()
-		headerContent = container.NewHBox(
-			petrolLabel,  // Left
-			headerSpacer, // Spacer to push rate to right
-			p.rateLabel,  // Right
+		headerContent = container.NewBorder(
+			nil, nil,
+			container.NewPadded(petrolLabel), // Left with padding
+			container.NewPadded(p.rateLabel), // Right with padding
+			nil,                              // Center empty
 		)
 	}
-	// Stack header background and content with padding
+	// Stack header background and content - header has fixed height
 	header := container.NewStack(headerBg, container.NewPadded(headerContent))
 
 	// LITRES display - value and unit on same line (with multi-color support)
@@ -861,25 +864,25 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 		logoWidget = layout.NewSpacer()
 	}
 
-	// Create footer with white background, logo on left, button on right
+	// Create footer with white background - fixed height for 1024x600
 	footerBg := canvas.NewRectangle(color.White)
+	footerBg.SetMinSize(fyne.NewSize(1024, 100))
 
-	// Footer content: logo left, spacer middle, button right
-	// Use HBox with proper alignment for better control
-	footerSpacer := layout.NewSpacer()
-	footerContent := container.NewHBox(
+	// Footer content: logo left, button right - use Border for proper alignment
+	footerContent := container.NewBorder(
+		nil, nil,
 		container.NewPadded(logoWidget),  // Left (with padding)
-		footerSpacer,                     // Middle (spacer to push button right)
 		container.NewPadded(p.payButton), // Right (with padding)
+		nil,                              // Center empty
 	)
 
-	// Stack footer background and content with padding
+	// Stack footer background and content - footer has fixed height
 	footer := container.NewStack(footerBg, container.NewPadded(footerContent))
 
-	// Decorative separator line - full width, thick, darker
+	// Decorative separator line - full width, thinner for 1024x600
 	lineDarkerGray := color.RGBA{R: 120, G: 120, B: 120, A: 255} // 50% darker than displayWhite
 	line1 := canvas.NewRectangle(lineDarkerGray)
-	line1.SetMinSize(fyne.NewSize(1024, 15))
+	line1.SetMinSize(fyne.NewSize(900, 6)) // Slightly narrower and thinner for better fit
 
 	// Fixed horizontal spacer for "this sale" layout
 	horizontalSpacer := canvas.NewRectangle(color.Transparent)
@@ -909,7 +912,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 					),
 				),
 				layout.NewSpacer(),
-				container.NewCenter(line1),
+				container.NewCenter(container.NewPadded(line1)),
 				layout.NewSpacer(),
 				// Amount with currency on same line - properly aligned
 				container.NewCenter(
@@ -954,7 +957,7 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 					),
 				),
 				layout.NewSpacer(),
-				container.NewCenter(line1),
+				container.NewCenter(container.NewPadded(line1)),
 				layout.NewSpacer(),
 				// Amount with currency on same line - properly aligned
 				container.NewCenter(
