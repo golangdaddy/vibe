@@ -34,14 +34,36 @@ func NewGobotRFIDReader() (*GobotRFIDReader, error) {
 		[]gobot.Device{driver},
 	)
 	
-	// Start the robot (initializes hardware)
+	// Start the robot (initializes hardware) with timeout
 	// This will call driver.initialize() via afterStart callback
 	// The robot.Start() will:
 	// 1. Start connections (adaptor)
 	// 2. Start devices (driver) - which calls driver.Start()
 	// 3. Driver.Start() calls GetSpiConnection() which needs the adaptor to be connected
-	if err := robot.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start RFID reader: %w", err)
+	// 
+	// Use timeout to prevent hanging - gobot can block indefinitely if SPI is not available
+	startDone := make(chan error, 1)
+	go func() {
+		startDone <- robot.Start()
+	}()
+	
+	select {
+	case err := <-startDone:
+		if err != nil {
+			return nil, fmt.Errorf("failed to start RFID reader: %w", err)
+		}
+	case <-time.After(5 * time.Second):
+		// Timeout - robot.Start() is hanging, likely SPI connection issue
+		// This happens when:
+		// - SPI is not enabled (run: sudo raspi-config)
+		// - SPI permissions issue (run: sudo usermod -aG spi $USER)
+		// - SPI device not available (/dev/spidev0.0 missing)
+		// - Hardware not connected
+		// Try to stop what we can (may not work if it's stuck)
+		go func() {
+			robot.Stop()
+		}()
+		return nil, fmt.Errorf("timeout: gobot robot.Start() hung (SPI not available/permissions issue - will try periph.io)")
 	}
 	
 	// Give the driver a moment to fully initialize
