@@ -160,11 +160,20 @@ func (g *GobotRFIDReader) readUID() ([]byte, error) {
 	}
 	
 	// Check if card is present (this detects the card)
+	// IsCardPresent() returns error if no card is detected
 	err := g.driver.IsCardPresent()
 	if err != nil {
-		// No card present
+		// No card present - this is normal when no card is on reader
+		// Log occasionally for debugging
+		if time.Since(g.lastSeen) > 10*time.Second {
+			fmt.Printf("DEBUG: IsCardPresent() returned: %v (no card on reader)\n", err)
+			g.lastSeen = time.Now()
+		}
 		return nil, fmt.Errorf("no card present: %w", err)
 	}
+	
+	// Card detected! IsCardPresent() succeeded
+	fmt.Printf("DEBUG: IsCardPresent() succeeded - card detected!\n")
 	
 	// Card is detected! But IsCardPresent() halts the card, and we can't
 	// access piccActivate() to read the real UID (it's unexported).

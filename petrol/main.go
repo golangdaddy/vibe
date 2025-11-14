@@ -796,19 +796,22 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	var headerContent fyne.CanvasObject
 	if debugMode {
 		// Header with PETROL (left), DEBUG MODE (center), rate (right)
-		headerContent = container.NewBorder(
-			nil, nil,
+		headerSpacer1 := layout.NewSpacer()
+		headerSpacer2 := layout.NewSpacer()
+		headerContent = container.NewHBox(
 			petrolLabel,                        // Left
-			p.rateLabel,                        // Right
+			headerSpacer1,                      // Spacer
 			container.NewCenter(modeIndicator), // Center
+			headerSpacer2,                      // Spacer
+			p.rateLabel,                        // Right
 		)
 	} else {
 		// Header with PETROL (left), rate (right)
-		headerContent = container.NewBorder(
-			nil, nil,
-			petrolLabel, // Left
-			p.rateLabel, // Right
-			nil,         // Center (empty)
+		headerSpacer := layout.NewSpacer()
+		headerContent = container.NewHBox(
+			petrolLabel,  // Left
+			headerSpacer, // Spacer to push rate to right
+			p.rateLabel,  // Right
 		)
 	}
 	// Stack header background and content with padding
@@ -862,14 +865,15 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 	footerBg := canvas.NewRectangle(color.White)
 
 	// Footer content: logo left, spacer middle, button right
-	footerContent := container.NewBorder(
-		nil, nil,
+	// Use HBox with proper alignment for better control
+	footerSpacer := layout.NewSpacer()
+	footerContent := container.NewHBox(
 		container.NewPadded(logoWidget),  // Left (with padding)
+		footerSpacer,                     // Middle (spacer to push button right)
 		container.NewPadded(p.payButton), // Right (with padding)
-		nil,                              // Center (empty)
 	)
 
-	// Stack footer background and content with additional internal padding
+	// Stack footer background and content with padding
 	footer := container.NewStack(footerBg, container.NewPadded(footerContent))
 
 	// Decorative separator line - full width, thick, darker
@@ -907,18 +911,24 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 				layout.NewSpacer(),
 				container.NewCenter(line1),
 				layout.NewSpacer(),
-				// Amount with currency on same line
+				// Amount with currency on same line - properly aligned
 				container.NewCenter(
 					container.NewHBox(
 						container.NewVBox(
 							layout.NewSpacer(),
-							thisSale,
-							saleThis,
+							container.NewCenter(thisSale),
+							container.NewCenter(saleThis),
 							layout.NewSpacer(),
 						),
 						horizontalSpacer,
-						currencySymbol,
-						p.amountContainer,
+						container.NewVBox(
+							layout.NewSpacer(),
+							container.NewHBox(
+								currencySymbol,
+								p.amountContainer,
+							),
+							layout.NewSpacer(),
+						),
 					),
 				),
 				layout.NewSpacer(),
@@ -946,18 +956,24 @@ func (p *PetrolPump) createGUIDisplay(a fyne.App) fyne.Window {
 				layout.NewSpacer(),
 				container.NewCenter(line1),
 				layout.NewSpacer(),
-				// Amount with currency on same line
+				// Amount with currency on same line - properly aligned
 				container.NewCenter(
 					container.NewHBox(
 						container.NewVBox(
 							layout.NewSpacer(),
-							thisSale,
-							saleThis,
+							container.NewCenter(thisSale),
+							container.NewCenter(saleThis),
 							layout.NewSpacer(),
 						),
 						horizontalSpacer,
-						currencySymbol,
-						p.amountContainer,
+						container.NewVBox(
+							layout.NewSpacer(),
+							container.NewHBox(
+								currencySymbol,
+								p.amountContainer,
+							),
+							layout.NewSpacer(),
+						),
 					),
 				),
 				layout.NewSpacer(),
