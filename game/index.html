@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Car Dodge - Arcade Game</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 0 50px rgba(255, 0, 255, 0.5);
+        }
+
+        #gameCanvas {
+            display: block;
+            border: 4px solid #FF00FF;
+            background: #222;
+        }
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            color: #FFF;
+        }
+
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 30px;
+            font-size: 14px;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        .hud-item {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border: 2px solid #00FF00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+
+        .hud-value {
+            color: #00FF00;
+            display: inline-block;
+            min-width: 100px;
+            text-align: right;
+            animation: pulse 0.5s ease-in-out;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: all;
+            z-index: 1000;
+        }
+
+        #startScreen h1 {
+            font-size: 32px;
+            color: #FF00FF;
+            margin-bottom: 30px;
+            text-shadow: 3px 3px 0 #000, 0 0 20px #FF00FF;
+            animation: glow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 3px 3px 0 #000, 0 0 10px #FF00FF;
+            }
+            to {
+                text-shadow: 3px 3px 0 #000, 0 0 30px #FF00FF, 0 0 40px #FF00FF;
+            }
+        }
+
+        #startScreen .controls {
+            font-size: 12px;
+            margin: 10px 0;
+            color: #00FFFF;
+            text-shadow: 2px 2px 0 #000;
+            line-height: 1.8;
+        }
+
+        #startScreen .subtitle {
+            font-size: 10px;
+            color: #FFD700;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 16px;
+            font-family: 'Press Start 2P', cursive;
+            background: #FF00FF;
+            color: #FFF;
+            border: 3px solid #FFF;
+            cursor: pointer;
+            pointer-events: all;
+            transition: all 0.2s;
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.8);
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        button:hover {
+            background: #00FF00;
+            border-color: #FF00FF;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.8);
+            transform: scale(1.05);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: all;
+            z-index: 1000;
+        }
+
+        #gameOver h1 {
+            font-size: 36px;
+            color: #FF0000;
+            margin-bottom: 20px;
+            text-shadow: 3px 3px 0 #000, 0 0 20px #FF0000;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        #gameOver .stats {
+            font-size: 14px;
+            margin: 10px 0;
+            color: #00FFFF;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        #gameOver .stats span {
+            color: #FFD700;
+        }
+
+        #highScore {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 10px;
+            color: #FFD700;
+            text-shadow: 2px 2px 0 #000;
+        }
+        
+        #notification {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #FFD700;
+            text-shadow: 3px 3px 0 #000, 0 0 20px #FFD700;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 500;
+        }
+        
+        #notification.show {
+            animation: notification 2s ease-out;
+        }
+        
+        @keyframes notification {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        
+        <div id="ui">
+            <div id="hud">
+                <div class="hud-item">
+                    SCORE: <span class="hud-value" id="score">0</span>
+                </div>
+                <div class="hud-item">
+                    SPEED: <span class="hud-value" id="speed">0</span>
+                </div>
+            </div>
+            <div id="notification"></div>
+        </div>
+
+        <div id="startScreen">
+            <h1>🚗 CAR DODGE 🚗</h1>
+            <div class="subtitle">RETRO ARCADE EDITION</div>
+            <div class="controls">
+                ⬅️ LEFT ARROW or A - Move Left<br>
+                ➡️ RIGHT ARROW or D - Move Right<br>
+                ⬆️ UP ARROW or W - Move Up<br>
+                ⬇️ DOWN ARROW or S - Move Down
+            </div>
+            <div class="controls" style="margin-top: 20px; color: #FF00FF;">
+                DODGE THE TRAFFIC!<br>
+                SURVIVE AS LONG AS YOU CAN!<br>
+                <span style="color: #FFD700;">+1 LANE: 50, 200, 425, 762, 1268...</span><br>
+                <span style="color: #00FFFF; font-size: 10px;">TRAFFIC 15% FASTER EVERY 50 PTS • MAX 10 LANES</span><br>
+                <span style="color: #FF0000; font-size: 10px;">STAY ON ROAD! GRASS = -20 PTS/SEC</span>
+            </div>
+            <button id="startButton">START GAME</button>
+            <div id="highScore">HIGH SCORE: <span id="highScoreValue">0</span></div>
+        </div>
+
+        <div id="gameOver">
+            <h1>💥 GAME OVER 💥</h1>
+            <div class="stats">
+                FINAL SCORE: <span id="finalScore">0</span>
+            </div>
+            <div class="stats">
+                DISTANCE: <span id="finalDistance">0</span>m
+            </div>
+            <div class="stats">
+                CARS DODGED: <span id="carsDodged">0</span>
+            </div>
+            <button id="restartButton">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
+
