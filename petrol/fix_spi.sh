@@ -38,8 +38,10 @@ fi
 
 echo ""
 
-# Step 2: Add user to spi group
-echo "Step 2: Adding user to spi group..."
+# Step 2: Add user to spi and gpio groups
+echo "Step 2: Adding user to required groups..."
+
+# Check and add to spi group
 if groups $USER | grep -q spi; then
     echo "  ✓ User $USER already in spi group"
 else
@@ -51,6 +53,20 @@ else
     else
         echo "  ❌ Failed to add user to spi group"
         exit 1
+    fi
+fi
+
+# Check and add to gpio group (for periph.io GPIO access)
+if groups $USER | grep -q gpio; then
+    echo "  ✓ User $USER already in gpio group"
+else
+    echo "  → Adding $USER to gpio group..."
+    sudo usermod -aG gpio $USER
+    if [ $? -eq 0 ]; then
+        echo "  ✓ User $USER added to gpio group"
+        LOGIN_NEEDED=1
+    else
+        echo "  ⚠ Failed to add user to gpio group (may not exist on this system)"
     fi
 fi
 
@@ -79,6 +95,11 @@ if [ "$REBOOT_NEEDED" = "1" ] || [ "$LOGIN_NEEDED" = "1" ]; then
     echo "After rebooting/logging in, verify with:"
     echo "  ls -l /dev/spidev*"
     echo "  groups"
+    echo ""
+    echo "Expected output:"
+    echo "  crw-rw---- 1 root spi ... /dev/spidev0.0"
+    echo "  crw-rw---- 1 root spi ... /dev/spidev0.1"
+    echo "  ... spi gpio ... (should include 'spi' and 'gpio')"
     echo ""
     echo "Then run: ./petrol-pump"
 else

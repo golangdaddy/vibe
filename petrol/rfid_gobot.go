@@ -34,51 +34,29 @@ func NewGobotRFIDReader() (*GobotRFIDReader, error) {
 		[]gobot.Device{driver},
 	)
 	
-	// Start the robot (initializes hardware) with timeout and panic recovery
-	// This will call driver.initialize() via afterStart callback
+	// Start the robot (initializes hardware) with AutoRun=false so it returns immediately
+	// robot.Start(false) returns after initialization instead of blocking
 	// The robot.Start() will:
 	// 1. Start connections (adaptor)
 	// 2. Start devices (driver) - which calls driver.Start()
 	// 3. Driver.Start() calls GetSpiConnection() which needs the adaptor to be connected
 	// 
-	// Use timeout + panic recovery - gobot can panic or hang if SPI is not available
-	startDone := make(chan error, 1)
-	panicOccurred := make(chan bool, 1)
-	
-	go func() {
+	// With AutoRun=false, Start() returns immediately after init (doesn't wait for signals)
+	// Use panic recovery in case SPI access fails
+	var startErr error
+	func() {
 		defer func() {
 			if r := recover(); r != nil {
 				fmt.Printf("⚠ PANIC in gobot robot.Start(): %v\n", r)
-				panicOccurred <- true
+				startErr = fmt.Errorf("panic during initialization: %v", r)
 			}
 		}()
-		startDone <- robot.Start()
+		startErr = robot.Start(false)
 	}()
 	
-	select {
-	case err := <-startDone:
-		if err != nil {
-			return nil, fmt.Errorf("failed to start RFID reader: %w", err)
-		}
-	case <-panicOccurred:
-		// Panic occurred - gobot's system layer not initialized properly
-		// This happens when gobot can't access SPI or system resources
-		go func() {
-			robot.Stop()
-		}()
-		return nil, fmt.Errorf("panic in gobot initialization (system layer not available - will try periph.io)")
-	case <-time.After(5 * time.Second):
-		// Timeout - robot.Start() is hanging, likely SPI connection issue
-		// This happens when:
-		// - SPI is not enabled (run: sudo raspi-config)
-		// - SPI permissions issue (run: sudo usermod -aG spi $USER)
-		// - SPI device not available (/dev/spidev0.0 missing)
-		// - Hardware not connected
-		// Try to stop what we can (may not work if it's stuck)
-		go func() {
-			robot.Stop()
-		}()
-		return nil, fmt.Errorf("timeout: gobot robot.Start() hung (SPI not available/permissions issue - will try periph.io)")
+	if startErr != nil {
+		robot.Stop()
+		return nil, fmt.Errorf("failed to start RFID reader: %w", startErr)
 	}
 	
 	// Give the driver a moment to fully initialize
