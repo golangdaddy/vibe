@@ -100,25 +100,25 @@ func (g *GobotRFIDReader) IsCardPresent() (bool, error) {
 		return false, fmt.Errorf("driver not initialized")
 	}
 	
-	// IsCardPresent returns error if no card is detected
-	err := g.driver.IsCardPresent()
-	if err != nil {
-		// No card present - not a real error
-		return false, nil
-	}
-	
-	// Card detected - try to read UID to confirm
-	// But don't fail if UID read fails - card might have moved
+	// Try to read UID directly - this is more reliable than IsCardPresent()
+	// because IsCardPresent() might halt the card, making UID read fail
+	// Reading UID will detect the card and get its ID in one operation
 	uid, err := g.readUID()
 	if err != nil {
-		// Card might have moved away or read failed
-		// Return false but don't treat as error
+		// No card present or read failed - not a real error
+		// Only log errors occasionally to avoid spam
+		if time.Since(g.lastSeen) > 5*time.Second {
+			fmt.Printf("DEBUG: readUID error (no card?): %v\n", err)
+			g.lastSeen = time.Now()
+		}
 		return false, nil
 	}
 	
 	if len(uid) > 0 {
+		// Card detected!
 		g.lastCardID = formatUID(uid)
 		g.lastSeen = time.Now()
+		fmt.Printf("✓✓✓ Card detected! UID: %s\n", g.lastCardID)
 		return true, nil
 	}
 	
@@ -169,31 +169,43 @@ func (g *GobotRFIDReader) readUID() ([]byte, error) {
 	
 	// Call piccActivate() which returns ([]byte, error)
 	// Use defer/recover to catch any panics from SPI access
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("PANIC in readUID: %v\n", r)
+	var uid []byte
+	var callErr error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("PANIC in readUID reflection call: %v\n", r)
+				callErr = fmt.Errorf("panic: %v", r)
+			}
+		}()
+		
+		results := method.Call(nil)
+		if len(results) != 2 {
+			callErr = fmt.Errorf("unexpected return values from piccActivate: got %d, expected 2", len(results))
+			return
 		}
+		
+		// Check error first
+		errValue := results[1]
+		if !errValue.IsNil() {
+			callErr = errValue.Interface().(error)
+			return
+		}
+		
+		// Extract UID bytes
+		uidValue := results[0]
+		if uidValue.IsNil() {
+			callErr = fmt.Errorf("no UID returned (nil)")
+			return
+		}
+		
+		uid = uidValue.Interface().([]byte)
 	}()
 	
-	results := method.Call(nil)
-	if len(results) != 2 {
-		return nil, fmt.Errorf("unexpected return values from piccActivate: got %d, expected 2", len(results))
+	if callErr != nil {
+		return nil, callErr
 	}
 	
-	// Check error first
-	errValue := results[1]
-	if !errValue.IsNil() {
-		err := errValue.Interface().(error)
-		return nil, err
-	}
-	
-	// Extract UID bytes
-	uidValue := results[0]
-	if uidValue.IsNil() {
-		return nil, fmt.Errorf("no UID returned (nil)")
-	}
-	
-	uid := uidValue.Interface().([]byte)
 	return uid, nil
 }
 
