@@ -36,6 +36,13 @@ let roadY = 0;
 const roadSpeed = 5;
 let lanes = [];
 
+// Hard shoulder (left lane)
+let hardShoulderAvailable = false;
+let hardShoulderTimer = 0;
+const HARD_SHOULDER_ON_DURATION = 5 * 60; // 5 seconds at 60 FPS
+const HARD_SHOULDER_OFF_DURATION = 10 * 60; // 10 seconds at 60 FPS
+const HARD_SHOULDER_WIDTH = 30; // Same as grass border width
+
 // Grass penalty
 let grassPenaltyAccumulator = 0;
 const GRASS_PENALTY_PER_SECOND = 20;
@@ -50,11 +57,11 @@ const colors = ['#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#FFA500'
 // Calculate lane positions based on number of lanes
 function calculateLanes() {
     lanes = [];
-    const roadWidth = canvas.width - 60; // Excluding grass borders
+    const roadWidth = canvas.width - HARD_SHOULDER_WIDTH - 30; // Excluding hard shoulder and right grass border
     const laneWidth = roadWidth / numLanes;
     
     for (let i = 0; i < numLanes; i++) {
-        lanes.push(30 + laneWidth * i + laneWidth / 2);
+        lanes.push(HARD_SHOULDER_WIDTH + laneWidth * i + laneWidth / 2);
     }
 }
 
@@ -91,6 +98,8 @@ function startGame() {
     nextLaneMilestone = 50;
     laneMilestoneInterval = 150;
     grassPenaltyAccumulator = 0;
+    hardShoulderAvailable = false;
+    hardShoulderTimer = 0;
     trafficSpeed = BASE_TRAFFIC_SPEED;
     spawnInterval = 120;
     trafficCars = [];
@@ -120,6 +129,20 @@ function update() {
     
     // Update distance
     distance += trafficSpeed;
+    
+    // Update hard shoulder availability (5 seconds on, 10 seconds off)
+    hardShoulderTimer++;
+    if (hardShoulderAvailable) {
+        if (hardShoulderTimer >= HARD_SHOULDER_ON_DURATION) {
+            hardShoulderAvailable = false;
+            hardShoulderTimer = 0;
+        }
+    } else {
+        if (hardShoulderTimer >= HARD_SHOULDER_OFF_DURATION) {
+            hardShoulderAvailable = true;
+            hardShoulderTimer = 0;
+        }
+    }
     
     // Check for traffic frequency milestones every 50 points
     const currentMilestoneLevel = Math.floor(score / 50);
@@ -171,7 +194,9 @@ function update() {
     }
     
     // Player movement
-    if ((keys['a'] || keys['arrowleft']) && player.x > 10) {
+    // Allow hard shoulder when available, otherwise minimum x is hard shoulder width
+    const minX = hardShoulderAvailable ? 0 : HARD_SHOULDER_WIDTH;
+    if ((keys['a'] || keys['arrowleft']) && player.x > minX) {
         player.x -= player.speed;
     }
     if ((keys['d'] || keys['arrowright']) && player.x < canvas.width - player.width - 10) {
@@ -184,13 +209,22 @@ function update() {
         player.y += player.speed;
     }
     
-    // Check if player is on grass and apply penalty
-    const onGrass = player.x < 30 || player.x + player.width > canvas.width - 30;
-    if (onGrass) {
-        // Accumulate penalty points
+    // Check if player is on hard shoulder when not available
+    const onHardShoulder = player.x < HARD_SHOULDER_WIDTH;
+    if (onHardShoulder && !hardShoulderAvailable) {
+        // Apply same penalty as grass when hard shoulder is closed
         grassPenaltyAccumulator += GRASS_PENALTY_PER_FRAME;
         
         // When we've accumulated at least 1 point, deduct it
+        if (grassPenaltyAccumulator >= 1) {
+            const pointsToDeduct = Math.floor(grassPenaltyAccumulator);
+            score = Math.max(0, score - pointsToDeduct);
+            grassPenaltyAccumulator -= pointsToDeduct;
+        }
+    } else if (player.x + player.width > canvas.width - 30) {
+        // Check if player is on right grass border
+        grassPenaltyAccumulator += GRASS_PENALTY_PER_FRAME;
+        
         if (grassPenaltyAccumulator >= 1) {
             const pointsToDeduct = Math.floor(grassPenaltyAccumulator);
             score = Math.max(0, score - pointsToDeduct);
@@ -253,6 +287,22 @@ function update() {
     // Update UI
     document.getElementById('score').textContent = score;
     document.getElementById('speed').textContent = Math.floor(trafficSpeed * 20);
+    
+    // Update hard shoulder status
+    const hardShoulderStatusEl = document.getElementById('hardShoulderStatus');
+    const hardShoulderTextEl = document.getElementById('hardShoulderText');
+    if (gameStarted) {
+        hardShoulderStatusEl.style.display = 'block';
+        if (hardShoulderAvailable) {
+            hardShoulderTextEl.textContent = 'OPEN';
+            hardShoulderTextEl.style.color = '#00FF00';
+        } else {
+            hardShoulderTextEl.textContent = 'CLOSED';
+            hardShoulderTextEl.style.color = '#FF0000';
+        }
+    } else {
+        hardShoulderStatusEl.style.display = 'none';
+    }
 }
 
 function spawnTrafficCar() {
@@ -279,12 +329,26 @@ function spawnTrafficCar() {
 }
 
 function checkCollision(rect1, rect2) {
-    // Add some padding for more forgiving collision
-    const padding = 5;
-    return rect1.x + padding < rect2.x + rect2.width - padding &&
-           rect1.x + rect1.width - padding > rect2.x + padding &&
-           rect1.y + padding < rect2.y + rect2.height - padding &&
-           rect1.y + rect1.height - padding > rect2.y + padding;
+    // Collision box is much smaller than sprite for very forgiving gameplay
+    // Cars are 40x70px, so 3px padding = ~15% width reduction, ~9% height reduction
+    const padding = 3; // 3px on each side = 6px total reduction per dimension
+    
+    // Calculate effective collision box (smaller than sprite)
+    const rect1Left = rect1.x + padding;
+    const rect1Right = rect1.x + rect1.width - padding;
+    const rect1Top = rect1.y + padding;
+    const rect1Bottom = rect1.y + rect1.height - padding;
+    
+    const rect2Left = rect2.x + padding;
+    const rect2Right = rect2.x + rect2.width - padding;
+    const rect2Top = rect2.y + padding;
+    const rect2Bottom = rect2.y + rect2.height - padding;
+    
+    // Check if collision boxes overlap
+    return rect1Left < rect2Right &&
+           rect1Right > rect2Left &&
+           rect1Top < rect2Bottom &&
+           rect1Bottom > rect2Top;
 }
 
 function endGame() {
@@ -326,9 +390,22 @@ function draw() {
     // Draw player car
     drawCar(player.x, player.y, player.width, player.height, player.color);
     
-    // Draw warning indicator if on grass
-    const onGrass = player.x < 30 || player.x + player.width > canvas.width - 30;
-    if (onGrass && gameStarted) {
+    // Draw warning indicator if on grass or hard shoulder when closed
+    const onHardShoulder = player.x < HARD_SHOULDER_WIDTH;
+    const onRightGrass = player.x + player.width > canvas.width - 30;
+    
+    if (onHardShoulder && !hardShoulderAvailable && gameStarted) {
+        // Draw red warning border around player car
+        ctx.strokeStyle = '#FF0000';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(player.x - 3, player.y - 3, player.width + 6, player.height + 6);
+        
+        // Draw warning text
+        ctx.fillStyle = '#FF0000';
+        ctx.font = 'bold 16px "Press Start 2P"';
+        ctx.textAlign = 'center';
+        ctx.fillText('HARD SHOULDER CLOSED! -20/sec', canvas.width / 2, 50);
+    } else if (onRightGrass && gameStarted) {
         // Draw red warning border around player car
         ctx.strokeStyle = '#FF0000';
         ctx.lineWidth = 3;
@@ -347,25 +424,79 @@ function drawRoad() {
     ctx.fillStyle = '#444';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Grass borders
+    // Hard shoulder (left lane) - very obvious visual
+    if (hardShoulderAvailable) {
+        // Available - bright green with yellow stripes
+        ctx.fillStyle = '#00FF00';
+        ctx.fillRect(0, 0, HARD_SHOULDER_WIDTH, canvas.height);
+        
+        // Draw bright yellow diagonal stripes
+        ctx.strokeStyle = '#FFFF00';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([15, 15]);
+        for (let i = -20; i < canvas.height + 20; i += 25) {
+            ctx.beginPath();
+            ctx.moveTo(0, i + roadY);
+            ctx.lineTo(HARD_SHOULDER_WIDTH, i + roadY - 12);
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        
+        // Add text indicator
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 12px "Press Start 2P"';
+        ctx.textAlign = 'center';
+        ctx.save();
+        ctx.translate(HARD_SHOULDER_WIDTH / 2, canvas.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('OPEN', 0, 0);
+        ctx.restore();
+    } else {
+        // Not available - bright red with X pattern
+        ctx.fillStyle = '#FF0000';
+        ctx.fillRect(0, 0, HARD_SHOULDER_WIDTH, canvas.height);
+        
+        // Draw bold white X pattern
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 4;
+        for (let i = 0; i < canvas.height; i += 25) {
+            ctx.beginPath();
+            ctx.moveTo(0, i + roadY);
+            ctx.lineTo(HARD_SHOULDER_WIDTH, i + roadY + 12);
+            ctx.moveTo(HARD_SHOULDER_WIDTH, i + roadY);
+            ctx.lineTo(0, i + roadY + 12);
+            ctx.stroke();
+        }
+        
+        // Add text indicator
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 10px "Press Start 2P"';
+        ctx.textAlign = 'center';
+        ctx.save();
+        ctx.translate(HARD_SHOULDER_WIDTH / 2, canvas.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('CLOSED', 0, 0);
+        ctx.restore();
+    }
+    
+    // Grass border on right only
     ctx.fillStyle = '#2d5016';
-    ctx.fillRect(0, 0, 30, canvas.height);
     ctx.fillRect(canvas.width - 30, 0, 30, canvas.height);
     
-    // Road surface
+    // Main road surface (starts after hard shoulder)
     ctx.fillStyle = '#555';
-    ctx.fillRect(30, 0, canvas.width - 60, canvas.height);
+    ctx.fillRect(HARD_SHOULDER_WIDTH, 0, canvas.width - HARD_SHOULDER_WIDTH - 30, canvas.height);
     
     // Lane markers (draw between each lane)
     ctx.strokeStyle = '#FFF';
     ctx.lineWidth = 3;
     ctx.setLineDash([20, 20]);
     
-    const roadWidth = canvas.width - 60;
+    const roadWidth = canvas.width - HARD_SHOULDER_WIDTH - 30;
     const laneWidth = roadWidth / numLanes;
     
     for (let i = 1; i < numLanes; i++) {
-        const x = 30 + laneWidth * i;
+        const x = HARD_SHOULDER_WIDTH + laneWidth * i;
         ctx.beginPath();
         ctx.moveTo(x, roadY);
         ctx.lineTo(x, canvas.height);
@@ -377,11 +508,13 @@ function drawRoad() {
     // Road edges
     ctx.strokeStyle = '#FFD700';
     ctx.lineWidth = 4;
+    // Left edge (between hard shoulder and main road) - make it very visible
     ctx.beginPath();
-    ctx.moveTo(30, 0);
-    ctx.lineTo(30, canvas.height);
+    ctx.moveTo(HARD_SHOULDER_WIDTH, 0);
+    ctx.lineTo(HARD_SHOULDER_WIDTH, canvas.height);
     ctx.stroke();
     
+    // Right edge
     ctx.beginPath();
     ctx.moveTo(canvas.width - 30, 0);
     ctx.lineTo(canvas.width - 30, canvas.height);
@@ -398,41 +531,34 @@ function drawCar(x, y, width, height, color) {
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y, width, height);
     
-    // Windshield
+    // Windshield - all cars have windshield at bottom (front)
     ctx.fillStyle = '#000';
-    if (y === player.y) {
-        // Player car - windshield at top
-        ctx.fillRect(x + 5, y + 5, width - 10, height * 0.25);
-    } else {
-        // Traffic cars - windshield at bottom
-        ctx.fillRect(x + 5, y + height - height * 0.25 - 5, width - 10, height * 0.25);
-    }
+    ctx.fillRect(x + 5, y + height - height * 0.25 - 5, width - 10, height * 0.25);
     
-    // Wheels
+    // Wheels - all cars have same orientation
     ctx.fillStyle = '#000';
     const wheelWidth = 8;
     const wheelHeight = 15;
     
-    // Front wheels
-    ctx.fillRect(x - 3, y + 10, wheelWidth, wheelHeight);
-    ctx.fillRect(x + width - 5, y + 10, wheelWidth, wheelHeight);
-    
-    // Back wheels
+    // Front wheels at bottom
     ctx.fillRect(x - 3, y + height - 25, wheelWidth, wheelHeight);
     ctx.fillRect(x + width - 5, y + height - 25, wheelWidth, wheelHeight);
     
-    // Headlights/taillights
-    ctx.fillStyle = y === player.y ? '#FFFF00' : '#FF0000';
+    // Back wheels at top
+    ctx.fillRect(x - 3, y + 10, wheelWidth, wheelHeight);
+    ctx.fillRect(x + width - 5, y + 10, wheelWidth, wheelHeight);
+    
+    // Headlights/taillights - all cars have same orientation
     const lightSize = 4;
-    if (y === player.y) {
-        // Player car - headlights at front
-        ctx.fillRect(x + 8, y + 2, lightSize, lightSize);
-        ctx.fillRect(x + width - 12, y + 2, lightSize, lightSize);
-    } else {
-        // Traffic cars - taillights at back
-        ctx.fillRect(x + 8, y + height - 6, lightSize, lightSize);
-        ctx.fillRect(x + width - 12, y + height - 6, lightSize, lightSize);
-    }
+    // Headlights at front (bottom)
+    ctx.fillStyle = '#FFFF00';
+    ctx.fillRect(x + 8, y + height - 6, lightSize, lightSize);
+    ctx.fillRect(x + width - 12, y + height - 6, lightSize, lightSize);
+    
+    // Taillights at back (top)
+    ctx.fillStyle = '#FF0000';
+    ctx.fillRect(x + 8, y + 2, lightSize, lightSize);
+    ctx.fillRect(x + width - 12, y + 2, lightSize, lightSize);
     
     // Add glow effect for player
     if (y === player.y) {
