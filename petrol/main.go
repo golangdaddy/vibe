@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -1337,19 +1338,34 @@ func main() {
 func initRFIDReader() RFIDReader {
 	fmt.Println("\nInitializing RFID reader...")
 
-	// Try gobot MFRC522 driver first (uses SPI polling of chip registers)
-	// NOTE: gobot polls the MFRC522's internal interrupt registers via SPI
-	// It does NOT use GPIO IRQ pin - this is why it's more reliable!
-	fmt.Println("  Attempting gobot MFRC522 driver (SPI register polling mode)...")
-	gobotReader, err := NewGobotRFIDReader()
-	if err == nil {
-		fmt.Println("✓ Gobot MFRC522 RFID reader initialized successfully!")
-		fmt.Println("  ✓ Using gobot library with SPI interrupt register polling")
-		fmt.Println("  ✓ No GPIO IRQ pin required - more reliable than periph.io!")
-		fmt.Println("  ✓ Hardware ready - tap your card on the reader to pay")
-		return gobotReader
+	// Skip gobot in debug mode (no GPIO = probably not a real Pi with hardware)
+	// Also check if SPI devices exist before trying gobot
+	spiDevicesExist := false
+	if spidevFiles, err := filepath.Glob("/dev/spidev*"); err == nil && len(spidevFiles) > 0 {
+		spiDevicesExist = true
 	}
-	fmt.Printf("  ⚠ Gobot initialization failed: %v\n", err)
+
+	if !debugMode && spiDevicesExist {
+		// Try gobot MFRC522 driver first (uses SPI polling of chip registers)
+		// NOTE: gobot polls the MFRC522's internal interrupt registers via SPI
+		// It does NOT use GPIO IRQ pin - this is why it's more reliable!
+		fmt.Println("  Attempting gobot MFRC522 driver (SPI register polling mode)...")
+		gobotReader, err := NewGobotRFIDReader()
+		if err == nil {
+			fmt.Println("✓ Gobot MFRC522 RFID reader initialized successfully!")
+			fmt.Println("  ✓ Using gobot library with SPI interrupt register polling")
+			fmt.Println("  ✓ No GPIO IRQ pin required - more reliable than periph.io!")
+			fmt.Println("  ✓ Hardware ready - tap your card on the reader to pay")
+			return gobotReader
+		}
+		fmt.Printf("  ⚠ Gobot initialization failed: %v\n", err)
+	} else {
+		if debugMode {
+			fmt.Println("  Skipping gobot (debug mode - no hardware expected)")
+		} else if !spiDevicesExist {
+			fmt.Println("  Skipping gobot (no SPI devices found - run: make setup-spi)")
+		}
+	}
 
 	// Fallback: Try periph.io MFRC522 hardware (requires GPIO IRQ)
 	fmt.Println("  Attempting periph.io MFRC522 driver (requires GPIO IRQ)...")

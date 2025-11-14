@@ -34,16 +34,24 @@ func NewGobotRFIDReader() (*GobotRFIDReader, error) {
 		[]gobot.Device{driver},
 	)
 	
-	// Start the robot (initializes hardware) with timeout
+	// Start the robot (initializes hardware) with timeout and panic recovery
 	// This will call driver.initialize() via afterStart callback
 	// The robot.Start() will:
 	// 1. Start connections (adaptor)
 	// 2. Start devices (driver) - which calls driver.Start()
 	// 3. Driver.Start() calls GetSpiConnection() which needs the adaptor to be connected
 	// 
-	// Use timeout to prevent hanging - gobot can block indefinitely if SPI is not available
+	// Use timeout + panic recovery - gobot can panic or hang if SPI is not available
 	startDone := make(chan error, 1)
+	panicOccurred := make(chan bool, 1)
+	
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("⚠ PANIC in gobot robot.Start(): %v\n", r)
+				panicOccurred <- true
+			}
+		}()
 		startDone <- robot.Start()
 	}()
 	
@@ -52,6 +60,13 @@ func NewGobotRFIDReader() (*GobotRFIDReader, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to start RFID reader: %w", err)
 		}
+	case <-panicOccurred:
+		// Panic occurred - gobot's system layer not initialized properly
+		// This happens when gobot can't access SPI or system resources
+		go func() {
+			robot.Stop()
+		}()
+		return nil, fmt.Errorf("panic in gobot initialization (system layer not available - will try periph.io)")
 	case <-time.After(5 * time.Second):
 		// Timeout - robot.Start() is hanging, likely SPI connection issue
 		// This happens when:
