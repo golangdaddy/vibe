@@ -1315,12 +1315,15 @@ func main() {
 func initRFIDReader() RFIDReader {
 	fmt.Println("\nInitializing RFID reader...")
 
-	// Try gobot MFRC522 driver first (uses SPI polling, no GPIO IRQ needed!)
-	fmt.Println("  Attempting gobot MFRC522 driver (SPI polling mode)...")
+	// Try gobot MFRC522 driver first (uses SPI polling of chip registers)
+	// NOTE: gobot polls the MFRC522's internal interrupt registers via SPI
+	// It does NOT use GPIO IRQ pin - this is why it's more reliable!
+	fmt.Println("  Attempting gobot MFRC522 driver (SPI register polling mode)...")
 	gobotReader, err := NewGobotRFIDReader()
 	if err == nil {
 		fmt.Println("✓ Gobot MFRC522 RFID reader initialized successfully!")
-		fmt.Println("  ✓ Using SPI interrupt polling (no GPIO IRQ required)")
+		fmt.Println("  ✓ Using gobot library with SPI interrupt register polling")
+		fmt.Println("  ✓ No GPIO IRQ pin required - more reliable than periph.io!")
 		fmt.Println("  ✓ Hardware ready - tap your card on the reader to pay")
 		return gobotReader
 	}

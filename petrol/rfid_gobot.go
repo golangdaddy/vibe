@@ -1,8 +1,9 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
+	"reflect"
+	"time"
 
 	"gobot.io/x/gobot/v2"
 	"gobot.io/x/gobot/v2/drivers/spi"
@@ -11,9 +12,11 @@ import (
 
 // GobotRFIDReader implements RFIDReader using gobot's MFRC522 driver
 type GobotRFIDReader struct {
-	adaptor *raspi.Adaptor
-	driver  *spi.MFRC522Driver
-	robot   *gobot.Robot
+	adaptor    *raspi.Adaptor
+	driver     *spi.MFRC522Driver
+	robot      *gobot.Robot
+	lastCardID string
+	lastSeen   time.Time
 }
 
 // NewGobotRFIDReader creates a new RFID reader using gobot
@@ -32,9 +35,14 @@ func NewGobotRFIDReader() (*GobotRFIDReader, error) {
 	)
 	
 	// Start the robot (initializes hardware)
+	// This will call driver.initialize() via afterStart callback
 	if err := robot.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start RFID reader: %w", err)
 	}
+	
+	// Give the driver a moment to fully initialize
+	// The afterStart callback sets up the connection wrapper
+	time.Sleep(200 * time.Millisecond)
 	
 	reader := &GobotRFIDReader{
 		adaptor: adaptor,
@@ -46,7 +54,7 @@ func NewGobotRFIDReader() (*GobotRFIDReader, error) {
 }
 
 // IsCardPresent checks if an RFID card is present
-// This uses gobot's internal SPI polling - no GPIO IRQ needed!
+// Uses gobot's SPI polling of interrupt registers (no GPIO IRQ needed)
 func (g *GobotRFIDReader) IsCardPresent() (bool, error) {
 	// IsCardPresent returns error if no card is detected
 	err := g.driver.IsCardPresent()
@@ -54,36 +62,100 @@ func (g *GobotRFIDReader) IsCardPresent() (bool, error) {
 		// No card present - not a real error
 		return false, nil
 	}
-	return true, nil
+	
+	// Card detected - try to read UID to confirm
+	uid, err := g.readUID()
+	if err != nil {
+		// Card might have moved away
+		return false, nil
+	}
+	
+	if len(uid) > 0 {
+		g.lastCardID = formatUID(uid)
+		g.lastSeen = time.Now()
+		return true, nil
+	}
+	
+	return false, nil
 }
 
 // ReadCardID reads the unique ID from an RFID card
 func (g *GobotRFIDReader) ReadCardID() (string, error) {
-	// First check if card is present
-	present, err := g.IsCardPresent()
-	if err != nil {
-		return "", err
-	}
-	if !present {
-		return "", fmt.Errorf("no card present")
+	// Return cached UID if recent
+	if time.Since(g.lastSeen) < 2*time.Second && g.lastCardID != "" {
+		return g.lastCardID, nil
 	}
 	
-	// Read text from card (gobot's method)
-	// This internally calls piccActivate() which returns the UID
-	// For simple UID reading, we can use ReadText which does the full workflow
-	text, err := g.driver.ReadText()
+	// Read UID directly
+	uid, err := g.readUID()
 	if err != nil {
 		return "", fmt.Errorf("failed to read card: %w", err)
 	}
 	
-	// Convert to hex string format (similar to periph.io output)
-	// For now, return first 8 bytes as hex
-	if len(text) >= 4 {
-		uid := []byte(text[:4])
-		return formatUID(uid), nil
+	if len(uid) == 0 {
+		return "", fmt.Errorf("no card present")
 	}
 	
-	return hex.EncodeToString([]byte(text)), nil
+	g.lastCardID = formatUID(uid)
+	g.lastSeen = time.Now()
+	return g.lastCardID, nil
+}
+
+// readUID uses reflection to call the unexported piccActivate() method
+// This is necessary because gobot doesn't expose a direct UID reading method
+// NOTE: gobot uses SPI polling of interrupt registers (no GPIO IRQ pin needed)
+func (g *GobotRFIDReader) readUID() ([]byte, error) {
+	// Use reflection to access the unexported piccActivate method
+	// The MFRC522Common is embedded as a pointer in MFRC522Driver
+	driverValue := reflect.ValueOf(g.driver).Elem()
+	commonField := driverValue.FieldByName("MFRC522Common")
+	if !commonField.IsValid() {
+		return nil, fmt.Errorf("could not access MFRC522Common field")
+	}
+	
+	// MFRC522Common is a pointer, so we need to get the value it points to
+	var commonValue reflect.Value
+	if commonField.Kind() == reflect.Ptr {
+		if commonField.IsNil() {
+			return nil, fmt.Errorf("MFRC522Common is nil - driver not initialized")
+		}
+		commonValue = commonField.Elem()
+	} else {
+		commonValue = commonField
+	}
+	
+	// Get the piccActivate method (it's on the pointer receiver)
+	// Try pointer method first
+	method := reflect.ValueOf(g.driver.MFRC522Common).MethodByName("piccActivate")
+	if !method.IsValid() {
+		// Try on the value
+		method = commonValue.MethodByName("piccActivate")
+		if !method.IsValid() {
+			return nil, fmt.Errorf("piccActivate method not found")
+		}
+	}
+	
+	// Call piccActivate() which returns ([]byte, error)
+	results := method.Call(nil)
+	if len(results) != 2 {
+		return nil, fmt.Errorf("unexpected return values from piccActivate: got %d, expected 2", len(results))
+	}
+	
+	// Check error first
+	errValue := results[1]
+	if !errValue.IsNil() {
+		err := errValue.Interface().(error)
+		return nil, err
+	}
+	
+	// Extract UID bytes
+	uidValue := results[0]
+	if uidValue.IsNil() {
+		return nil, fmt.Errorf("no UID returned (nil)")
+	}
+	
+	uid := uidValue.Interface().([]byte)
+	return uid, nil
 }
 
 // Close cleans up resources
