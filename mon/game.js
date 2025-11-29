@@ -121,7 +121,9 @@ let player = {
     moving: false,
     team: [], // Empty initially
     inventory: {
-        balls: 0,
+        pokeBalls: 0,
+        greatBalls: 0,
+        ultraBalls: 0,
         potions: 0
     },
     money: 0
@@ -176,6 +178,8 @@ const shopUI = document.getElementById('shop-ui');
 const shopMoneyEl = document.getElementById('shop-money');
 const btnCloseShop = document.getElementById('btn-close-shop');
 const btnBuyBall = document.getElementById('btn-buy-ball');
+const btnBuyGreatBall = document.getElementById('btn-buy-greatball');
+const btnBuyUltraBall = document.getElementById('btn-buy-ultraball');
 const btnBuyPotion = document.getElementById('btn-buy-potion');
 
 // Battle Buttons
@@ -186,6 +190,8 @@ document.getElementById('btn-run').addEventListener('click', runAway);
 
 // Bag Buttons
 document.getElementById('btn-use-ball').addEventListener('click', () => useItem('ball'));
+document.getElementById('btn-use-greatball').addEventListener('click', () => useItem('greatball'));
+document.getElementById('btn-use-ultraball').addEventListener('click', () => useItem('ultraball'));
 document.getElementById('btn-use-potion').addEventListener('click', () => useItem('potion'));
 document.getElementById('btn-cancel-bag').addEventListener('click', closeBagMenu);
 
@@ -200,7 +206,9 @@ btnCloseDex.addEventListener('click', closePokedex);
 
 // Shop Buttons
 btnCloseShop.addEventListener('click', closeShop);
-btnBuyBall.addEventListener('click', () => buyItem('ball', 200));
+btnBuyBall.addEventListener('click', () => buyItem('ball', 10));
+btnBuyGreatBall.addEventListener('click', () => buyItem('greatball', 50));
+btnBuyUltraBall.addEventListener('click', () => buyItem('ultraball', 150));
 btnBuyPotion.addEventListener('click', () => buyItem('potion', 300));
 
 // Overlay Click
@@ -262,7 +270,7 @@ function startNewGame() {
         targetY: TILE_SIZE * 2,
         moving: false,
         team: [ { ...POKEDEX[0] } ],
-        inventory: { balls: 10, potions: 5 },
+        inventory: { pokeBalls: 10, greatBalls: 0, ultraBalls: 0, potions: 5 },
         money: 1000
     };
     
@@ -297,6 +305,16 @@ function loadGame(name) {
     
     playerName = name;
     player = data.player;
+    
+    // Migration: Map old 'balls' to 'pokeBalls' if needed
+    if (player.inventory.balls !== undefined) {
+        player.inventory.pokeBalls = (player.inventory.pokeBalls || 0) + player.inventory.balls;
+        delete player.inventory.balls;
+    }
+    // Ensure other ball types exist
+    if (player.inventory.greatBalls === undefined) player.inventory.greatBalls = 0;
+    if (player.inventory.ultraBalls === undefined) player.inventory.ultraBalls = 0;
+
     currentMapType = data.currentMapType;
     map = data.map || generateOverworld();
     
@@ -321,11 +339,9 @@ function hideOverlay() {
 }
 
 function closeAllModals() {
-    // Helper to force close everything and return to safe state
     if (currentState === STATE.START_MENU) return;
-    if (currentState === STATE.BATTLING) return; // Can't close overlay in battle generally, but battle UI is not a modal in this sense
+    if (currentState === STATE.BATTLING) return; 
     
-    // If in a modal state, close it
     if (currentState === STATE.INVENTORY || currentState === STATE.POKEDEX || currentState === STATE.SHOP) {
         inventoryUI.classList.add('hidden');
         pokedexUI.classList.add('hidden');
@@ -343,9 +359,7 @@ function toggleInventory() {
     if (currentState === STATE.SHOP) return;
 
     if (inventoryUI.classList.contains('hidden')) {
-        // Close others first to be safe
         closeAllModals(); 
-        // Open Inventory
         currentState = STATE.INVENTORY;
         inventoryUI.classList.remove('hidden');
         renderInventory(false);
@@ -357,12 +371,7 @@ function toggleInventory() {
 
 function closeInventory() {
     if (currentState === STATE.BATTLING) {
-        // Special case: if we opened it for switching in battle
         inventoryUI.classList.add('hidden');
-        // Don't change state to ROAMING, stay in BATTLING
-        // But wait, switching menu doesn't use overlay?
-        // Let's make switching menu use overlay too for consistency? 
-        // Actually battle UI is separate.
         return;
     }
     inventoryUI.classList.add('hidden');
@@ -373,15 +382,9 @@ function closeInventory() {
 function openSwitchMenu() {
     if (currentState !== STATE.BATTLING) return;
     
-    // Just show inventory on top of battle UI
     inventoryUI.classList.remove('hidden');
     renderInventory(true);
     log("Choose a Pokemon to switch to.");
-    // No overlay for battle switch? Or yes?
-    // Use overlay to block other battle buttons?
-    // Let's stick to simple for now: Battle UI is bottom, Inventory is top.
-    // But if we click overlay, it might close inventory and return to battle.
-    // Let's check closeAllModals logic.
 }
 
 function togglePokedex() {
@@ -421,7 +424,6 @@ function closeShop() {
     shopUI.classList.add('hidden');
     hideOverlay();
     currentState = STATE.ROAMING;
-    // Move player slightly off tile
     player.y += TILE_SIZE;
     player.targetY += TILE_SIZE;
 }
@@ -433,7 +435,9 @@ function updateShopUI() {
 function buyItem(item, cost) {
     if (player.money >= cost) {
         player.money -= cost;
-        if (item === 'ball') player.inventory.balls++;
+        if (item === 'ball') player.inventory.pokeBalls++;
+        if (item === 'greatball') player.inventory.greatBalls++;
+        if (item === 'ultraball') player.inventory.ultraBalls++;
         if (item === 'potion') player.inventory.potions++;
         updateShopUI();
     } else {
@@ -453,8 +457,10 @@ function openBagMenu() {
     battleMenu.classList.add('hidden');
     bagMenu.classList.remove('hidden');
     
-    document.getElementById('bag-ball-count').innerText = player.inventory.balls;
-    document.getElementById('bag-potion-count').innerText = player.inventory.potions;
+    document.getElementById('bag-ball-count').innerText = player.inventory.pokeBalls || 0;
+    document.getElementById('bag-greatball-count').innerText = player.inventory.greatBalls || 0;
+    document.getElementById('bag-ultraball-count').innerText = player.inventory.ultraBalls || 0;
+    document.getElementById('bag-potion-count').innerText = player.inventory.potions || 0;
 }
 
 function closeBagMenu() {
@@ -464,7 +470,13 @@ function closeBagMenu() {
 
 function useItem(item) {
     if (item === 'ball') {
-        catchPokemon(); 
+        catchPokemon('poke'); 
+        closeBagMenu();
+    } else if (item === 'greatball') {
+        catchPokemon('great'); 
+        closeBagMenu();
+    } else if (item === 'ultraball') {
+        catchPokemon('ultra'); 
         closeBagMenu();
     } else if (item === 'potion') {
         if (player.inventory.potions > 0) {
@@ -682,18 +694,32 @@ function attack() {
     }
 }
 
-function catchPokemon() {
+function catchPokemon(ballType) {
     if (currentState !== STATE.BATTLING) return;
     if (wasForcedSwitch) {
         log("You must choose a Pokemon!");
         return;
     }
     
-    if (player.inventory.balls > 0) {
-        player.inventory.balls--;
-        log(`You threw a ball! (${player.inventory.balls} left)`);
+    let invKey = 'pokeBalls';
+    let multiplier = 1;
+    let ballName = "Poke Ball";
+    
+    if (ballType === 'great') {
+        invKey = 'greatBalls';
+        multiplier = 1.5;
+        ballName = "Great Ball";
+    } else if (ballType === 'ultra') {
+        invKey = 'ultraBalls';
+        multiplier = 2.0;
+        ballName = "Ultra Ball";
+    }
+    
+    if (player.inventory[invKey] > 0) {
+        player.inventory[invKey]--;
+        log(`You threw a ${ballName}! (${player.inventory[invKey]} left)`);
         
-        const catchChance = 1 - (currentEnemy.hp / currentEnemy.maxHp) + 0.2;
+        const catchChance = (1 - (currentEnemy.hp / currentEnemy.maxHp) + 0.2) * multiplier;
         
         if (Math.random() < catchChance) {
             log(`Gotcha! ${currentEnemy.name} was caught!`);
@@ -707,7 +733,7 @@ function catchPokemon() {
             enemyTurn();
         }
     } else {
-        log("You don't have any balls left!");
+        log(`You don't have any ${ballName}s left!`);
     }
 }
 

@@ -43,8 +43,16 @@
                 <h3>Poke Mart</h3>
                 <p>Money: $<span id="shop-money">0</span></p>
                 <div class="shop-item">
-                    <span>Poke Ball ($200)</span>
+                    <span>Poke Ball ($10)</span>
                     <button id="btn-buy-ball">Buy</button>
+                </div>
+                <div class="shop-item">
+                    <span>Great Ball ($50)</span>
+                    <button id="btn-buy-greatball">Buy</button>
+                </div>
+                <div class="shop-item">
+                    <span>Ultra Ball ($150)</span>
+                    <button id="btn-buy-ultraball">Buy</button>
                 </div>
                 <div class="shop-item">
                     <span>Potion ($300)</span>
@@ -73,8 +81,10 @@
                         <button id="btn-bag">Bag</button>
                         <button id="btn-run">Run</button>
                     </div>
-                    <div id="bag-menu" class="hidden" style="margin-top: 5px; border-top: 1px solid #ccc; padding-top: 5px;">
+                    <div id="bag-menu" class="hidden" style="margin-top: 5px; border-top: 1px solid #ccc; padding-top: 5px; display: flex; flex-wrap: wrap; gap: 5px;">
                         <button id="btn-use-ball">Poke Ball (x<span id="bag-ball-count">0</span>)</button>
+                        <button id="btn-use-greatball">Great Ball (x<span id="bag-greatball-count">0</span>)</button>
+                        <button id="btn-use-ultraball">Ultra Ball (x<span id="bag-ultraball-count">0</span>)</button>
                         <button id="btn-use-potion">Potion (x<span id="bag-potion-count">0</span>)</button>
                         <button id="btn-cancel-bag">Back</button>
                     </div>
