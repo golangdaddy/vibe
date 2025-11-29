@@ -1,0 +1,226 @@
+body {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #333;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+#game-container {
+    position: relative;
+    width: 800px;
+    height: 600px;
+    background-color: #000;
+    border: 4px solid #eee;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+/* Modal Overlay */
+#modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7); /* Dark semi-transparent */
+    pointer-events: auto; /* Blocks clicks to elements below */
+    z-index: 20; /* Above buttons, below modals */
+}
+
+/* UI Buttons (pointer events enabled) */
+#ui-layer button {
+    pointer-events: auto;
+    z-index: 5; /* Below overlay */
+    position: relative; /* Ensure z-index applies */
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Start Screen */
+#start-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    pointer-events: auto;
+    z-index: 100;
+}
+
+#start-screen h1 {
+    font-size: 48px;
+    margin-bottom: 40px;
+    color: #FFD700;
+    text-shadow: 2px 2px #FF0000;
+}
+
+#save-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 300px;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.save-slot {
+    background: #444;
+    padding: 10px;
+    cursor: pointer;
+    border: 2px solid #666;
+    text-align: center;
+}
+
+.save-slot:hover {
+    background: #666;
+    border-color: white;
+}
+
+#player-name-input {
+    padding: 10px;
+    font-size: 16px;
+    font-family: inherit;
+    width: 200px;
+    pointer-events: auto;
+}
+
+/* Inventory/Modal UI */
+#inventory-ui, #pokedex-ui, #shop-ui {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    background-color: white;
+    border: 4px solid #333;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto;
+    max-height: 80%;
+    overflow-y: auto;
+    z-index: 30; /* Above overlay */
+}
+
+#pokemon-list, #pokedex-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.pokemon-item, .pokedex-item, .shop-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #ccc;
+    background: #f9f9f9;
+}
+
+.pokemon-item span, .pokedex-item span {
+    font-weight: bold;
+}
+
+/* Battle UI */
+#battle-ui {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 250px; /* Increased height for bag menu */
+    background-color: rgba(240, 240, 240, 0.9);
+    border-top: 4px solid #333;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    box-sizing: border-box;
+    pointer-events: auto;
+    z-index: 10; /* Below overlay (if modal opens during battle?) Actually usually independent */
+}
+
+#enemy-stat {
+    position: absolute;
+    top: -150px;
+    right: 50px;
+    background: white;
+    padding: 10px;
+    border: 2px solid black;
+    border-radius: 5px;
+}
+
+#player-stat {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.health-bar {
+    width: 150px;
+    height: 10px;
+    background-color: #ccc;
+    border: 1px solid #000;
+    margin-top: 5px;
+}
+
+#enemy-hp-bar, #player-hp-bar {
+    width: 100%;
+    height: 100%;
+    background-color: #2ecc71;
+    transition: width 0.3s;
+}
+
+#battle-menu, #bag-menu {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+button {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border: 2px solid #333;
+    background: white;
+    font-family: inherit;
+}
+
+button:hover {
+    background: #eee;
+}
+
+#battle-log {
+    margin-top: 10px;
+    font-size: 14px;
+    height: 60px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 5px;
+    background: white;
+}

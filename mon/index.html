@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pocket Mon Clone</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui-layer">
+            <div id="modal-overlay" class="hidden"></div>
+            <!-- Start Screen -->
+            <div id="start-screen">
+                <h1>Pocket Mon</h1>
+                <div id="save-slots"></div>
+                <div style="margin-top: 20px;">
+                    <input type="text" id="player-name-input" placeholder="Trainer Name" maxlength="12">
+                    <button id="btn-new-game">New Game</button>
+                </div>
+            </div>
+
+            <button id="btn-toggle-inv" class="hidden" style="position: absolute; top: 10px; right: 10px;">My Pokemon</button>
+            <button id="btn-toggle-dex" class="hidden" style="position: absolute; top: 50px; right: 10px;">Pokedex</button>
+            
+            <div id="inventory-ui" class="hidden">
+                <h3>My Team</h3>
+                <div id="pokemon-list"></div>
+                <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: center;">
+                    <button id="btn-save-game">Save Game</button>
+                    <button id="btn-close-inv">Close</button>
+                </div>
+            </div>
+
+            <div id="pokedex-ui" class="hidden">
+                <h3>Pokedex</h3>
+                <div id="pokedex-list"></div>
+                <button id="btn-close-dex">Close</button>
+            </div>
+
+            <div id="shop-ui" class="hidden">
+                <h3>Poke Mart</h3>
+                <p>Money: $<span id="shop-money">0</span></p>
+                <div class="shop-item">
+                    <span>Poke Ball ($200)</span>
+                    <button id="btn-buy-ball">Buy</button>
+                </div>
+                <div class="shop-item">
+                    <span>Potion ($300)</span>
+                    <button id="btn-buy-potion">Buy</button>
+                </div>
+                <button id="btn-close-shop">Leave</button>
+            </div>
+
+            <div id="battle-ui" class="hidden">
+                <div id="enemy-stat">
+                    <h3 id="enemy-name">Wild Pokemon</h3>
+                    <img id="enemy-img" src="" alt="Enemy" style="display:block; margin: 0 auto; width: 96px; height: 96px; image-rendering: pixelated;">
+                    <div class="health-bar"><div id="enemy-hp-bar"></div></div>
+                </div>
+                <div id="player-stat">
+                    <div style="display: flex; align-items: center;">
+                        <img id="player-img" src="" alt="Player" style="width: 64px; height: 64px; image-rendering: pixelated; margin-right: 10px;">
+                        <div style="width: 100%;">
+                            <h3 id="player-mon-name" style="margin:0;">My Pokemon</h3>
+                            <div class="health-bar"><div id="player-hp-bar"></div></div>
+                        </div>
+                    </div>
+                    <div id="battle-menu">
+                        <button id="btn-attack">Attack</button>
+                        <button id="btn-switch">Switch</button>
+                        <button id="btn-bag">Bag</button>
+                        <button id="btn-run">Run</button>
+                    </div>
+                    <div id="bag-menu" class="hidden" style="margin-top: 5px; border-top: 1px solid #ccc; padding-top: 5px;">
+                        <button id="btn-use-ball">Poke Ball (x<span id="bag-ball-count">0</span>)</button>
+                        <button id="btn-use-potion">Potion (x<span id="bag-potion-count">0</span>)</button>
+                        <button id="btn-cancel-bag">Back</button>
+                    </div>
+                </div>
+                <div id="battle-log"></div>
+            </div>
+        </div>
+    </div>
+    <script src="pokedex.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
